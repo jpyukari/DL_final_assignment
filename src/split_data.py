@@ -6,8 +6,6 @@ import torch.nn as nn
 
 from torchvision import transforms
 
-from configs.baseline import *
-
 from src.dataset import VQADataset
 from src.metrics import VQA_criterion
 from src.utils import set_seed
