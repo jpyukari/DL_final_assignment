@@ -221,7 +221,6 @@ def main():
         num_workers=2,
         pin_memory=True,
 
-)
     )
     print("8")
     valid_loader = torch.utils.data.DataLoader(
