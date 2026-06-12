@@ -173,16 +173,23 @@ def main():
     ])
 
     train_dataset = VQADataset(
-    df_path="./data/train_split.json",
-    image_dir="./data/train",
-    transform=transform,
-)
 
-valid_dataset = VQADataset(
-    df_path="./data/valid_split.json",
-    image_dir="./data/train",
-    transform=transform,
-)
+        df_path="./data/train_split.json",
+    
+        image_dir="./data/train",
+    
+        transform=transform,
+    
+    )
+
+    valid_dataset = VQADataset(
+
+        df_path="./data/valid_split.json",
+    
+        image_dir="./data/train",
+    
+        transform=transform,
+    
     )
 
     valid_dataset.update_dict(
