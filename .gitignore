@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# DL Competition
+data/
+outputs/
+*.pt
+*.pth
+*.ckpt
+wandb/
+tensorboard/
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# experiment artifacts
+*.csv
+!sample_submission.csv
