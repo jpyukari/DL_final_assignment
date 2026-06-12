@@ -219,8 +219,12 @@ def main():
     model = VQAModel(
         vocab_size=len(train_dataset.question2idx) + 1,
         n_answer=len(train_dataset.answer2idx),
-    ).to(device)
-    
+    )
+    print("9.5")
+
+    model = model.to(device)
+    print("10")
+
     if LOSS_TYPE == "hard":
 
         criterion = nn.CrossEntropyLoss()
