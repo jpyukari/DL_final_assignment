@@ -27,6 +27,16 @@ def train_one_epoch(
     criterion,
     device,
 ):
+    print("enter train_one_epoch")
+
+    for i, batch in enumerate(dataloader):
+
+        print("batch", i)
+
+        break
+
+    return 0,0,0,0
+    
     model.train()
 
     total_loss = 0
