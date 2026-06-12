@@ -155,15 +155,20 @@ def validate(
 
 def main():
 
+    print("1")
     set_seed(SEED)
 
+    print("2")
     os.makedirs("./outputs/checkpoints", exist_ok=True)
 
+    print("3")
     device = (
         "cuda"
         if torch.cuda.is_available()
         else "cpu"
     )
+
+    print("4")
 
     transform = transforms.Compose([
         transforms.Resize(
@@ -182,6 +187,7 @@ def main():
     
     )
 
+    print("5")
     valid_dataset = VQADataset(
 
         df_path="./data/valid_split.json",
@@ -191,28 +197,28 @@ def main():
         transform=transform,
     
     )
-
+    print("6")
     valid_dataset.update_dict(
         train_dataset
     )
-
+    print("7")
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
     )
-
+    print("8")
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
     )
-
+    print("9")
     model = VQAModel(
         vocab_size=len(train_dataset.question2idx) + 1,
         n_answer=len(train_dataset.answer2idx),
     ).to(device)
-
+    
     if LOSS_TYPE == "hard":
 
         criterion = nn.CrossEntropyLoss()
