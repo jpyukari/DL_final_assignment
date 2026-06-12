@@ -224,6 +224,7 @@ def main():
 
     model = model.to(device)
     print("10")
+    print("11")
 
     if LOSS_TYPE == "hard":
 
@@ -252,8 +253,9 @@ def main():
         raise ValueError(
             f"Unknown OPTIMIZER: {OPTIMIZER}"
         )
-
+    print("12")
     best_acc = -1.0
+    print("13")
 
     for epoch in range(NUM_EPOCHS):
 
