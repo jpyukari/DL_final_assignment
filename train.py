@@ -43,8 +43,7 @@ def train_one_epoch(
         mode_answer = batch["mode_answer"].to(device)
 
         pred = model(image, question)
-        if i == 0:
-            print("forward done")
+
             
         if LOSS_TYPE == "hard":
 
@@ -72,8 +71,7 @@ def train_one_epoch(
 
         optimizer.zero_grad()
         loss.backward()
-        if i == 0:
-            print("backward done")
+      
         optimizer.step()
 
         total_loss += loss.item()
