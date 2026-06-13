@@ -21,11 +21,15 @@ submission_zip = f"./outputs/submission_{timestamp}.zip"
 
 def main():
 
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        raise RuntimeError(
+            "GPU (CUDA/MPS) が利用できません。"
+            "CPU 実行は許可されていません。"
+        )
 
     print("device =", device)
 
@@ -117,6 +121,18 @@ def main():
         submission
     )
 
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(
+            f"model weights not found: {MODEL_PATH} "
+            f"(train.py を先に実行してください)"
+        )
+
+    if not os.path.exists(NOTEBOOK_PATH):
+        raise FileNotFoundError(
+            f"notebook not found: {NOTEBOOK_PATH} "
+            f"(提出には統合Notebookが必須です)"
+        )
+
     with ZipFile(
         submission_zip,
         "w"
@@ -128,15 +144,14 @@ def main():
         )
 
         zf.write(
-            "./outputs/checkpoints/best_model.pt",
+            MODEL_PATH,
             arcname="model.pt"
         )
 
-        if os.path.exists(NOTEBOOK_PATH):
-            zf.write(
-                NOTEBOOK_PATH,
-                arcname="submission.ipynb"
-            )
+        zf.write(
+            NOTEBOOK_PATH,
+            arcname=os.path.basename(NOTEBOOK_PATH),
+        )
 
     print(f"{submission_zip} created")
 

@@ -127,10 +127,10 @@ class VQADataset(torch.utils.data.Dataset):
         mode_answer_idx : torch.Tensor  (1)
             10人の回答者の回答の中で最頻値の回答のid
         """
-        image = Image.open(f"{self.image_dir}/{self.df['image'][idx]}")
+        image = Image.open(f"{self.image_dir}/{self.df['image'][idx]}").convert("RGB")
         image = self.transform(image)
         question = np.zeros(len(self.idx2question) + 1)  # 未知語用の要素を追加
-        question_words = self.df["question"][idx].split(" ")
+        question_words = process_text(self.df["question"][idx]).split(" ")
         for word in question_words:
             try:
                 question[self.question2idx[word]] = 1  # one-hot表現に変換

@@ -221,18 +221,20 @@ __marimo__/
 # DL Competition
 data/
 outputs/
+
+# model weights
 *.pt
 *.pth
 *.ckpt
+
+# experiment logs
 wandb/
 tensorboard/
+runs/
 
 # macOS
 .DS_Store
 
 # VSCode
 .vscode/
-
-# experiment artifacts
-*.csv
-!sample_submission.csv
+.DS_Store

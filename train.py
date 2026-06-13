@@ -173,11 +173,15 @@ def main():
     os.makedirs("./outputs/checkpoints", exist_ok=True)
 
     print("3")
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        raise RuntimeError(
+            "GPU (CUDA/MPS) が利用できません。"
+            "CPU 実行は許可されていません。"
+        )
 
     print("4")
 

@@ -18,4 +18,4 @@ MODEL = "baseline"
 EXP_NAME = "baseline"
 
 MODEL_PATH = "./outputs/checkpoints/best_model.pt"
-NOTEBOOK_PATH = "./submission.ipynb"
+NOTEBOOK_PATH = "./DL_Basic_2026_Spring_competition_VQA.ipynb"
