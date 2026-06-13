@@ -5,6 +5,8 @@ import torch
 from zipfile import ZipFile
 from datetime import datetime
 
+from tqdm import tqdm
+
 from torchvision import transforms
 
 from configs.baseline import *
@@ -95,10 +97,7 @@ def main():
 
     with torch.no_grad():
 
-        for i, batch in enumerate(test_loader):
-
-            if i % 100 == 0:
-                print(f"{i}/{len(test_dataset)}")
+        for batch in tqdm(test_loader, desc="inference"):
 
             image = batch["image"].to(device)
             question = batch["question"].to(device)

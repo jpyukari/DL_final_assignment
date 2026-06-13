@@ -4,6 +4,8 @@ import time
 import torch
 import torch.nn as nn
 
+from tqdm import tqdm
+
 from torchvision import transforms
 
 from configs.baseline import *
@@ -26,6 +28,7 @@ def train_one_epoch(
     optimizer,
     criterion,
     device,
+    desc="train",
 ):
     model.train()
 
@@ -35,7 +38,9 @@ def train_one_epoch(
 
     start = time.time()
 
-    for batch in dataloader:
+    pbar = tqdm(dataloader, desc=desc, leave=True)
+
+    for batch in pbar:
 
         image = batch["image"].to(device)
         question = batch["question"].to(device)
@@ -85,6 +90,8 @@ def train_one_epoch(
             pred.argmax(1) == mode_answer
         ).float().mean().item()
 
+        pbar.set_postfix(loss=f"{loss.item():.4f}")
+
     return (
         total_loss / len(dataloader),
         total_acc / len(dataloader),
@@ -99,6 +106,7 @@ def validate(
     dataloader,
     criterion,
     device,
+    desc="valid",
 ):
     model.eval()
 
@@ -108,7 +116,7 @@ def validate(
 
     start = time.time()
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader, desc=desc, leave=True):
 
         image = batch["image"].to(device)
         question = batch["question"].to(device)
@@ -275,6 +283,7 @@ def main():
                 optimizer,
                 criterion,
                 device,
+                desc=f"train [{epoch+1}/{NUM_EPOCHS}]",
             )
         )
 
@@ -284,6 +293,7 @@ def main():
                 valid_loader,
                 criterion,
                 device,
+                desc=f"valid [{epoch+1}/{NUM_EPOCHS}]",
             )
         )
 
