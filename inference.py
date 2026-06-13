@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from zipfile import ZipFile
+from datetime import datetime
 
 from torchvision import transforms
 
@@ -10,6 +11,12 @@ from configs.baseline import *
 
 from src.dataset import VQADataset
 from src.models.baseline import VQAModel
+
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+
+submission_npy = f"./outputs/submission_{timestamp}.npy"
+submission_zip = f"./outputs/submission_{timestamp}.zip"
 
 
 def main():
@@ -89,17 +96,17 @@ def main():
     submission = np.array(submission)
 
     np.save(
-        "./outputs/submission.npy",
+        submission_npy,
         submission
     )
 
     with ZipFile(
-        "./outputs/submission.zip",
+        submission_zip,
         "w"
     ) as zf:
 
         zf.write(
-            "./outputs/submission.npy",
+            submission_npy,
             arcname="submission.npy"
         )
 
@@ -114,7 +121,7 @@ def main():
                 arcname="submission.ipynb"
             )
 
-    print("submission.zip created")
+    print(f"{submission_zip} created")
 
 
 if __name__ == "__main__":
