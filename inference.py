@@ -37,7 +37,7 @@ def main():
     ])
 
     train_dataset = VQADataset(
-        df_path="./data/train.json",
+        df_path="./data/train_split.json",
         image_dir="./data/train",
         transform=transform,
     )
