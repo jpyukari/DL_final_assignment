@@ -2,7 +2,7 @@ SEED = 42
 
 BATCH_SIZE = 16
 
-NUM_EPOCHS = 4
+NUM_EPOCHS = 1
 
 LR = 1e-3
 
