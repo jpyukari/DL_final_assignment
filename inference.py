@@ -27,6 +27,8 @@ def main():
         else "cpu"
     )
 
+    print("device =", device)
+
     os.makedirs("./outputs", exist_ok=True)
 
     transform = transforms.Compose([
@@ -36,11 +38,15 @@ def main():
         transforms.ToTensor(),
     ])
 
+    print("loading train dataset...")
+
     train_dataset = VQADataset(
         df_path="./data/train_split.json",
         image_dir="./data/train",
         transform=transform,
     )
+
+    print("loading valid dataset...")
 
     test_dataset = VQADataset(
         df_path="./data/valid.json",
@@ -57,12 +63,18 @@ def main():
         test_dataset,
         batch_size=1,
         shuffle=False,
+        num_workers=2,
+        pin_memory=True,
     )
+
+    print("building model...")
 
     model = VQAModel(
         vocab_size=len(train_dataset.question2idx) + 1,
         n_answer=len(train_dataset.answer2idx),
     ).to(device)
+
+    print("loading checkpoint...")
 
     model.load_state_dict(
         torch.load(
@@ -75,9 +87,14 @@ def main():
 
     submission = []
 
+    print("start inference...")
+
     with torch.no_grad():
 
-        for batch in test_loader:
+        for i, batch in enumerate(test_loader):
+
+            if i % 100 == 0:
+                print(f"{i}/{len(test_dataset)}")
 
             image = batch["image"].to(device)
             question = batch["question"].to(device)
