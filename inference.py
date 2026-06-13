@@ -43,8 +43,8 @@ def main():
     )
 
     test_dataset = VQADataset(
-        df_path="./data/test.json",
-        image_dir="./data/test",
+        df_path="./data/valid.json",
+        image_dir="./data/valid",
         transform=transform,
         answer=False,
     )
