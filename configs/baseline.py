@@ -1,10 +1,10 @@
 SEED = 42
 
-BATCH_SIZE = 256
+BATCH_SIZE = 64
 
 NUM_EPOCHS = 2
 
-LR = 3e-4
+LR = 1e-3
 
 WEIGHT_DECAY = 1e-5
 
