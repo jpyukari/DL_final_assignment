@@ -6,13 +6,13 @@ NUM_EPOCHS = 2
 
 LR = 1e-3
 
-WEIGHT_DECAY = 1e-4
+WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
 
 LOSS_TYPE = "hard"
 
-IMAGE_SIZE = 224
+IMAGE_SIZE = 160
 
 MODEL = "baseline"
 EXP_NAME = "baseline"
