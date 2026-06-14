@@ -2,7 +2,7 @@ SEED = 42
 
 BATCH_SIZE = 128
 
-NUM_EPOCHS = 20
+NUM_EPOCHS = 2
 
 LR = 1e-3
 
@@ -10,7 +10,7 @@ WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
 
-LOSS_TYPE = "hard"
+LOSS_TYPE = "soft"
 
 IMAGE_SIZE = 224
 

@@ -220,17 +220,12 @@ def main():
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=2,
-        pin_memory=True,
-
     )
     print("8")
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=2,
-        pin_memory=True,
     )
     print("9")
     model = VQAModel(
