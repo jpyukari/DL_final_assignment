@@ -1,6 +1,6 @@
 SEED = 42
 
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 
 NUM_EPOCHS = 2
 
@@ -12,7 +12,7 @@ OPTIMIZER = "adam"
 
 LOSS_TYPE = "hard"
 
-IMAGE_SIZE = 256
+IMAGE_SIZE = 224
 
 MODEL = "baseline"
 EXP_NAME = "baseline"
