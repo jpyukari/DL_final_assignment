@@ -4,15 +4,15 @@ BATCH_SIZE = 128
 
 NUM_EPOCHS = 2
 
-LR = 1e-3
+LR = 3e-4
 
 WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
 
-LOSS_TYPE = "soft"
+LOSS_TYPE = "hard"
 
-IMAGE_SIZE = 224
+IMAGE_SIZE = 256
 
 MODEL = "baseline"
 EXP_NAME = "baseline"
