@@ -8,7 +8,7 @@ PATIENCE = 3
 
 LR = 1e-3
 
-WEIGHT_DECAY = 1e-5
+WEIGHT_DECAY = 1e-4
 
 OPTIMIZER = "adam"
 
