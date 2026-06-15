@@ -69,8 +69,9 @@ class VQAModel(nn.Module):
             dropout=dropout,
             batch_first=True,
         )
+        # enable_nested_tensor は MPS 未対応の nested tensor 最適化を使うため無効化する
         self.text_encoder = nn.TransformerEncoder(
-            encoder_layer, num_layers=num_layers
+            encoder_layer, num_layers=num_layers, enable_nested_tensor=False
         )
 
         self.fc = nn.Sequential(
