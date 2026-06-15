@@ -267,6 +267,7 @@ def main():
         )
     print("12")
     best_acc = -1.0
+    epochs_no_improve = 0
     print("13")
 
     for epoch in range(NUM_EPOCHS):
@@ -300,10 +301,24 @@ def main():
 
         if valid_acc > best_acc:
             best_acc = valid_acc
+            epochs_no_improve = 0
             torch.save(
                 model.state_dict(),
                 "./outputs/checkpoints/best_model.pt"
             )
+        else:
+            epochs_no_improve += 1
+            print(
+                f"No improvement for {epochs_no_improve}/{PATIENCE} "
+                f"epoch(s) (best Valid Acc={best_acc:.4f})"
+            )
+
+            if epochs_no_improve >= PATIENCE:
+                print(
+                    f"Early stopping at epoch {epoch+1} "
+                    f"(best Valid Acc={best_acc:.4f})"
+                )
+                break
 
     torch.save(
         model.state_dict(),
