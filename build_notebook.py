@@ -242,6 +242,7 @@ cells.append(code(
     "model = VQAModel(\n"
     "    vocab_size=len(train_dataset.question2idx) + 1,\n"
     "    n_answer=len(train_dataset.answer2idx),\n"
+    "    backbone=RESNET,\n"
     ").to(device)\n"
     "\n"
     "if LOSS_TYPE == \"hard\":\n"

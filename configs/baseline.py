@@ -19,5 +19,7 @@ IMAGE_SIZE = 224
 MODEL = "baseline"
 EXP_NAME = "baseline"
 
+RESNET = "resnet34"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet50"
+
 MODEL_PATH = "./outputs/checkpoints/best_model.pt"
 NOTEBOOK_PATH = "./DL_Basic_2026_Spring_competition_VQA.ipynb"

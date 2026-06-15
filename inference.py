@@ -78,6 +78,7 @@ def main():
     model = VQAModel(
         vocab_size=len(train_dataset.question2idx) + 1,
         n_answer=len(train_dataset.answer2idx),
+        backbone=RESNET,
     ).to(device)
 
     print("loading checkpoint...")

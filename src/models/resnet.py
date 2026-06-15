@@ -215,6 +215,13 @@ def ResNet18():
     return ResNet(BasicBlock, [2, 2, 2, 2])
 
 
+def ResNet34():
+    """
+    ResNet34 を生成する関数．
+    """
+    return ResNet(BasicBlock, [3, 4, 6, 3])
+
+
 def ResNet50():
     """
     ResNet50 を生成する関数．
