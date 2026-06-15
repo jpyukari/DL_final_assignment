@@ -62,11 +62,12 @@ class VQADataset(torch.utils.data.Dataset):
     """
     VQA データセットを扱うためのクラス．
     """
-    def __init__(self, df_path, image_dir, transform=None, answer=True):
+    def __init__(self, df_path, image_dir, transform=None, answer=True, max_qlen=30):
         self.transform = transform  # 画像の前処理
         self.image_dir = image_dir  # 画像ファイルのディレクトリ
         self.df = pd.read_json(df_path)  # 画像ファイルのパス，question, answerを持つDataFrame
         self.answer = answer
+        self.max_qlen = max_qlen  # 質問トークン列の最大長（パディング／切り詰め）
 
         # question / answerの辞書を作成
         self.question2idx = {}
@@ -129,21 +130,23 @@ class VQADataset(torch.utils.data.Dataset):
         """
         image = Image.open(f"{self.image_dir}/{self.df['image'][idx]}").convert("RGB")
         image = self.transform(image)
-        question = np.zeros(len(self.idx2question) + 1)  # 未知語用の要素を追加
+
+        # 質問をトークン ID 列に変換（Transformer 入力用）
+        unk_idx = len(self.question2idx)      # 未知語用 ID
+        pad_idx = len(self.question2idx) + 1  # パディング用 ID
+        question = np.full(self.max_qlen, pad_idx, dtype=np.int64)
         question_words = process_text(self.df["question"][idx]).split(" ")
-        for word in question_words:
-            try:
-                question[self.question2idx[word]] = 1  # one-hot表現に変換
-            except KeyError:
-                question[-1] = 1  # 未知語
+        for i, word in enumerate(question_words[: self.max_qlen]):
+            question[i] = self.question2idx.get(word, unk_idx)  # 未知語は unk_idx
+        question = torch.from_numpy(question)  # (max_qlen,) LongTensor
 
         if self.answer:
             answers = [self.answer2idx[process_text(answer["answer"])] for answer in self.df["answers"][idx]]
             mode_answer_idx = mode(answers)  # 最頻値を取得（正解ラベル）
 
-            return {"image": image, "question": torch.Tensor(question),"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
+            return {"image": image, "question": question,"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
         else:
-            return {"image": image, "question": torch.Tensor(question)}
+            return {"image": image, "question": question}
 
     def __len__(self):
         return len(self.df)
