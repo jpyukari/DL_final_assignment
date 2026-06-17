@@ -1,5 +1,9 @@
 # VQA Project
 
+##Omnicampus環境セットアップ
+chmod +x setup.sh
+./setup.sh
+
 ## 学習
 
 bash python train.py 
