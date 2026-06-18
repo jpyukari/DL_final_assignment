@@ -28,6 +28,7 @@ def train_one_epoch(
     optimizer,
     criterion,
     device,
+    unanswerable_idx=None,
     desc="train",
 ):
     model.train()
@@ -61,7 +62,8 @@ def train_one_epoch(
 
             soft_target = build_soft_target(
                 answers,
-                pred.shape[1]
+                pred.shape[1],
+                ignore_index=unanswerable_idx,
             )
 
             loss = criterion(
@@ -106,6 +108,7 @@ def validate(
     dataloader,
     criterion,
     device,
+    unanswerable_idx=None,
     desc="valid",
 ):
     model.eval()
@@ -136,7 +139,8 @@ def validate(
 
             soft_target = build_soft_target(
                 answers,
-                pred.shape[1]
+                pred.shape[1],
+                ignore_index=unanswerable_idx,
             )
 
             loss = criterion(
@@ -233,6 +237,7 @@ def main():
         n_answer=len(train_dataset.answer2idx),
         backbone=RESNET,
     )
+    unanswerable_idx = train_dataset.answer2idx.get("unanswerable")
     print("9.5")
 
     model = model.to(device)
@@ -280,6 +285,7 @@ def main():
                 optimizer,
                 criterion,
                 device,
+                unanswerable_idx=unanswerable_idx,
                 desc=f"train [{epoch+1}/{NUM_EPOCHS}]",
             )
         )
@@ -290,6 +296,7 @@ def main():
                 valid_loader,
                 criterion,
                 device,
+                unanswerable_idx=unanswerable_idx,
                 desc=f"valid [{epoch+1}/{NUM_EPOCHS}]",
             )
         )

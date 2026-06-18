@@ -13,7 +13,7 @@ class SoftCrossEntropyLoss(nn.Module):
 
         return loss.mean()
     
-def build_soft_target(answers, num_classes):
+def build_soft_target(answers, num_classes, ignore_index=None):
     """
     answers:
         (batch_size, 10)
@@ -31,9 +31,23 @@ def build_soft_target(answers, num_classes):
     )
 
     for i in range(batch_size):
-        for ans in answers[i]:
-            target[i, int(ans)] += 1
+        valid_count = 0
 
-    target /= answers.shape[1]
+        for ans in answers[i]:
+            ans_idx = int(ans)
+
+            if ignore_index is not None and ans_idx == ignore_index:
+                continue
+
+            target[i, ans_idx] += 1
+            valid_count += 1
+
+        # 全て ignore 対象なら元の分布でフォールバック
+        if valid_count == 0:
+            for ans in answers[i]:
+                target[i, int(ans)] += 1
+            valid_count = answers.shape[1]
+
+        target[i] /= valid_count
 
     return target
