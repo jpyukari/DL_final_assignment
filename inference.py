@@ -86,6 +86,13 @@ def main():
 
     model.eval()
 
+    unanswerable_idx = train_dataset.answer2idx.get("unanswerable")
+    if UNANSWERABLE_LOGIT_BIAS and unanswerable_idx is not None:
+        print(
+            f"unanswerable logit を -{UNANSWERABLE_LOGIT_BIAS} 補正します "
+            f"(idx={unanswerable_idx})"
+        )
+
     submission = []
 
     print("start inference...")
@@ -101,6 +108,9 @@ def main():
                 image,
                 question
             )
+
+            if UNANSWERABLE_LOGIT_BIAS and unanswerable_idx is not None:
+                pred[:, unanswerable_idx] -= UNANSWERABLE_LOGIT_BIAS
 
             pred = pred.argmax(1).item()
 

@@ -9,8 +9,11 @@ import torch
 from torchvision import transforms
 
 from statistics import mode
+from collections import Counter
 
-from configs.baseline import EXCLUDE_UNANSWERABLE
+from configs.baseline import EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT
+
+UNK_ANSWER = "<unk>"
 
 
 def process_text(text):
@@ -86,13 +89,20 @@ class VQADataset(torch.utils.data.Dataset):
         self.idx2question = {v: k for k, v in self.question2idx.items()}  # 逆変換用の辞書(question)
 
         if self.answer:
-            # 回答に含まれる文章を辞書に追加
+            # 回答の出現回数を数え、MIN_ANSWER_COUNT 以上のものだけをクラス化する。
+            # 希少回答（1例しかない等）は学習不能なので "<unk>" にまとめる。
+            answer_counter = Counter()
             for answers in self.df["answers"]:
                 for answer in answers:
-                    word = answer["answer"]
-                    word = process_text(word)
-                    if word not in self.answer2idx:
-                        self.answer2idx[word] = len(self.answer2idx)
+                    answer_counter[process_text(answer["answer"])] += 1
+
+            for word, count in answer_counter.items():
+                if count >= MIN_ANSWER_COUNT:
+                    self.answer2idx[word] = len(self.answer2idx)
+
+            # OOV（足切りされた希少回答）受け皿
+            self.answer2idx[UNK_ANSWER] = len(self.answer2idx)
+
             self.idx2answer = {v: k for k, v in self.answer2idx.items()}  # 逆変換用の辞書(answer)
 
     def update_dict(self, dataset):
@@ -145,15 +155,17 @@ class VQADataset(torch.utils.data.Dataset):
                 for answer in self.df["answers"][idx]
             ]
 
+            # 足切りされた回答は <unk> に写像
+            unk_idx = self.answer2idx[UNK_ANSWER]
             answers = [
-                self.answer2idx[answer_text]
+                self.answer2idx.get(answer_text, unk_idx)
                 for answer_text in answer_texts
             ]
 
             if EXCLUDE_UNANSWERABLE:
                 # unanswerable を除外して最頻値を取る（全件 unanswerable の時はフォールバック）
                 filtered_answers = [
-                    self.answer2idx[answer_text]
+                    self.answer2idx.get(answer_text, unk_idx)
                     for answer_text in answer_texts
                     if answer_text != "unanswerable"
                 ]
