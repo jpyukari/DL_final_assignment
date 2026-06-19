@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from configs.baseline import *
 
-from src.dataset import VQADataset
+from src.dataset import VQADataset, UNK_ANSWER
 from src.models.baseline import VQAModel
 from src.utils import build_transform
 
@@ -114,9 +114,14 @@ def main():
 
             pred = pred.argmax(1).item()
 
-            submission.append(
-                train_dataset.idx2answer[pred]
-            )
+            answer = train_dataset.idx2answer[pred]
+
+            # <unk>（足切りされた希少回答の受け皿）は提出すると 0 点なので、
+            # 高頻度で部分点が入りやすい unanswerable に振り替える。
+            if answer == UNK_ANSWER:
+                answer = "unanswerable"
+
+            submission.append(answer)
 
     submission = np.array(submission)
 
