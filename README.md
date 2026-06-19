@@ -1,5 +1,9 @@
 # VQA Project
 
+## omnicampus 環境セットアップ
+chmod +x src/setup.sh
+bash src/setup.sh
+pip install scikit-learn
 ## 学習
 
 bash python train.py 

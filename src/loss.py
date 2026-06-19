@@ -5,9 +5,18 @@ import torch.nn.functional as F
 
 class SoftCrossEntropyLoss(nn.Module):
 
+    def __init__(self, weight=None):
+        super().__init__()
+        # クラス重み (num_classes,)。None なら均等。
+        self.register_buffer("weight", weight)
+
     def forward(self, logits, soft_targets):
 
         log_probs = F.log_softmax(logits, dim=1)
+
+        if self.weight is not None:
+            # クラスごとに重み付け（ターゲット分布の各クラスのlossをスケール）
+            log_probs = log_probs * self.weight
 
         loss = -(soft_targets * log_probs).sum(dim=1)
 

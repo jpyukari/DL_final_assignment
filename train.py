@@ -247,13 +247,23 @@ def main():
     print("10")
     print("11")
 
+    # クラス重みベクトルを構築（頻出ラベルの loss を下げる）
+    class_weights = torch.ones(len(train_dataset.answer2idx))
+    for label, w in CLASS_WEIGHTS.items():
+        idx = train_dataset.answer2idx.get(label)
+        if idx is not None:
+            class_weights[idx] = w
+        else:
+            print(f"[warn] CLASS_WEIGHTS のラベル '{label}' は語彙に無いので無視")
+    class_weights = class_weights.to(device)
+
     if LOSS_TYPE == "hard":
 
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     elif LOSS_TYPE == "soft":
 
-        criterion = SoftCrossEntropyLoss()
+        criterion = SoftCrossEntropyLoss(weight=class_weights)
 
     else:
 

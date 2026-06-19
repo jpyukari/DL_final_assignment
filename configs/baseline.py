@@ -20,6 +20,15 @@ LOSS_TYPE = "hard"
 # False: unanswerable も通常ラベルとして扱う
 EXCLUDE_UNANSWERABLE = False
 
+# クラス重み: 頻出ラベルの loss を下げて過適応（量産）を防ぐ。{ラベル: 重み}。
+# 未指定ラベルは 1.0。空 dict {} で無効（全クラス 1.0）。hard/soft 両対応。
+# 例: unanswerable/yes/no が多すぎるので学習時のペナルティを軽くする。
+CLASS_WEIGHTS = {
+    "unanswerable": 0.9,
+    "yes": 1.5,
+    "no": 1.5,
+}
+
 # 推論時に unanswerable の logit から引く値（学習はそのまま、推論だけ抑制）。
 # 0.0 で無効。大きいほど unanswerable を出しにくくなる。
 # 最適値は valid で選べる:  python -m src.sweep_unanswerable
