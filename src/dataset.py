@@ -10,6 +10,8 @@ from torchvision import transforms
 
 from statistics import mode
 
+from configs.baseline import EXCLUDE_UNANSWERABLE
+
 
 def process_text(text):
     """
@@ -138,8 +140,26 @@ class VQADataset(torch.utils.data.Dataset):
                 question[-1] = 1  # 未知語
 
         if self.answer:
-            answers = [self.answer2idx[process_text(answer["answer"])] for answer in self.df["answers"][idx]]
-            mode_answer_idx = mode(answers)  # 最頻値を取得（正解ラベル）
+            answer_texts = [
+                process_text(answer["answer"])
+                for answer in self.df["answers"][idx]
+            ]
+
+            answers = [
+                self.answer2idx[answer_text]
+                for answer_text in answer_texts
+            ]
+
+            if EXCLUDE_UNANSWERABLE:
+                # unanswerable を除外して最頻値を取る（全件 unanswerable の時はフォールバック）
+                filtered_answers = [
+                    self.answer2idx[answer_text]
+                    for answer_text in answer_texts
+                    if answer_text != "unanswerable"
+                ]
+                mode_answer_idx = mode(filtered_answers) if filtered_answers else mode(answers)
+            else:
+                mode_answer_idx = mode(answers)
 
             return {"image": image, "question": torch.Tensor(question),"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
         else:

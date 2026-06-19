@@ -7,12 +7,11 @@ from datetime import datetime
 
 from tqdm import tqdm
 
-from torchvision import transforms
-
 from configs.baseline import *
 
 from src.dataset import VQADataset
 from src.models.baseline import VQAModel
+from src.utils import build_transform
 
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -37,12 +36,7 @@ def main():
 
     os.makedirs("./outputs", exist_ok=True)
 
-    transform = transforms.Compose([
-        transforms.Resize(
-            (IMAGE_SIZE, IMAGE_SIZE)
-        ),
-        transforms.ToTensor(),
-    ])
+    transform = build_transform()
 
     print("loading train dataset...")
 
@@ -78,6 +72,7 @@ def main():
     model = VQAModel(
         vocab_size=len(train_dataset.question2idx) + 1,
         n_answer=len(train_dataset.answer2idx),
+        backbone=RESNET,
     ).to(device)
 
     print("loading checkpoint...")
@@ -153,6 +148,18 @@ def main():
         )
 
     print(f"{submission_zip} created")
+
+    # 推論で使ったモデル + 生成した submission をそのまま分析してレポート保存
+    print("running analysis...")
+    try:
+        from src.analyze import analyze, write_report
+        report = analyze(
+            model_path=MODEL_PATH,
+            submission_npy=submission_npy,
+        )
+        write_report(report)
+    except Exception as e:
+        print(f"[warn] analyze をスキップしました: {e}")
 
 
 if __name__ == "__main__":
