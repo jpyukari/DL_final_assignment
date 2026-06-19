@@ -1,18 +1,17 @@
 import os
 import time
+import math
 
 import torch
 import torch.nn as nn
 
 from tqdm import tqdm
 
-from torchvision import transforms
-
 from configs.baseline import *
 
 from src.dataset import VQADataset
 from src.metrics import VQA_criterion
-from src.utils import set_seed
+from src.utils import set_seed, build_transform
 
 from src.models.baseline import VQAModel
 
@@ -76,9 +75,15 @@ def train_one_epoch(
                 f"Unknown LOSS_TYPE: {LOSS_TYPE}"
             )
 
+        if not torch.isfinite(loss):
+            raise RuntimeError(
+                f"loss が NaN/Inf になりました (loss={loss.item()})。"
+                "学習が発散しています。LR を下げる等の対策をしてください。"
+            )
+
         optimizer.zero_grad()
         loss.backward()
-      
+
         optimizer.step()
 
         total_loss += loss.item()
@@ -188,12 +193,7 @@ def main():
 
     print("4")
 
-    transform = transforms.Compose([
-        transforms.Resize(
-            (IMAGE_SIZE, IMAGE_SIZE)
-        ),
-        transforms.ToTensor(),
-    ])
+    transform = build_transform()
 
     train_dataset = VQADataset(
 
@@ -237,7 +237,10 @@ def main():
         n_answer=len(train_dataset.answer2idx),
         backbone=RESNET,
     )
-    unanswerable_idx = train_dataset.answer2idx.get("unanswerable")
+    unanswerable_idx = (
+        train_dataset.answer2idx.get("unanswerable")
+        if EXCLUDE_UNANSWERABLE else None
+    )
     print("9.5")
 
     model = model.to(device)
@@ -306,6 +309,12 @@ def main():
             f"Train Acc={train_acc:.4f} "
             f"Valid Acc={valid_acc:.4f}"
         )
+
+        if not math.isfinite(valid_loss):
+            raise RuntimeError(
+                f"valid_loss が NaN/Inf です (epoch {epoch+1})。"
+                "発散したモデルを best として保存しないため停止します。"
+            )
 
         if valid_acc > best_acc:
             best_acc = valid_acc
