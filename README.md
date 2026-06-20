@@ -1,5 +1,5 @@
 # VQA Project
-
+https://github.com/jpyukari/DL_final_assignment.git
 ## omnicampus 環境セットアップ
 chmod +x src/setup.sh
 bash src/setup.sh
