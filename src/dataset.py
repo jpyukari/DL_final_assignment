@@ -70,7 +70,14 @@ class VQADataset(torch.utils.data.Dataset):
     def __init__(self, df_path, image_dir, transform=None, answer=True):
         self.transform = transform  # 画像の前処理
         self.image_dir = image_dir  # 画像ファイルのディレクトリ
-        self.df = pd.read_json(df_path)  # 画像ファイルのパス，question, answerを持つDataFrame
+        # df_path は単一パスでも、複数パスのリスト（全データ学習用に train+valid 結合）でも可
+        if isinstance(df_path, (list, tuple)):
+            self.df = pd.concat(
+                [pd.read_json(p) for p in df_path],
+                ignore_index=True,
+            )
+        else:
+            self.df = pd.read_json(df_path)  # 画像ファイルのパス，question, answerを持つDataFrame
         self.answer = answer
 
         # question / answerの辞書を作成

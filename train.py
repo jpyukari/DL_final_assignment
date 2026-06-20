@@ -195,41 +195,53 @@ def main():
 
     transform = build_transform()
 
+    # TRAIN_ON_ALL: train_split + valid_split を結合して全データ学習（最終提出用）
+    train_df_path = (
+        ["./data/train_split.json", "./data/valid_split.json"]
+        if TRAIN_ON_ALL else "./data/train_split.json"
+    )
+
     train_dataset = VQADataset(
 
-        df_path="./data/train_split.json",
-    
+        df_path=train_df_path,
+
         image_dir="./data/train",
-    
+
         transform=transform,
-    
+
     )
 
     print("5")
-    valid_dataset = VQADataset(
+    if TRAIN_ON_ALL:
+        print("TRAIN_ON_ALL: train+valid 全データで学習（holdout/early-stopping なし）")
+        valid_loader = None
+        total_epochs = FINAL_EPOCHS
+    else:
+        valid_dataset = VQADataset(
 
-        df_path="./data/valid_split.json",
-    
-        image_dir="./data/train",
-    
-        transform=transform,
-    
-    )
-    print("6")
-    valid_dataset.update_dict(
-        train_dataset
-    )
+            df_path="./data/valid_split.json",
+
+            image_dir="./data/train",
+
+            transform=transform,
+
+        )
+        print("6")
+        valid_dataset.update_dict(
+            train_dataset
+        )
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+        )
+        total_epochs = NUM_EPOCHS
+
     print("7")
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-    )
-    print("8")
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
     )
     print("9")
     model = VQAModel(
@@ -289,7 +301,7 @@ def main():
     epochs_no_improve = 0
     print("13")
 
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(total_epochs):
 
         train_loss, train_acc, train_simple_acc, train_time = (
             train_one_epoch(
@@ -299,9 +311,22 @@ def main():
                 criterion,
                 device,
                 unanswerable_idx=unanswerable_idx,
-                desc=f"train [{epoch+1}/{NUM_EPOCHS}]",
+                desc=f"train [{epoch+1}/{total_epochs}]",
             )
         )
+
+        # TRAIN_ON_ALL: valid が無いので validation/early-stopping をスキップし、
+        # FINAL_EPOCHS まで回しきって best_model.pt を保存する。
+        if TRAIN_ON_ALL:
+            print(
+                f"Epoch [{epoch+1}/{total_epochs}] "
+                f"Train Acc={train_acc:.4f} (all-data)"
+            )
+            torch.save(
+                model.state_dict(),
+                "./outputs/checkpoints/best_model.pt"
+            )
+            continue
 
         valid_loss, valid_acc, valid_simple_acc, valid_time = (
             validate(
@@ -310,12 +335,12 @@ def main():
                 criterion,
                 device,
                 unanswerable_idx=unanswerable_idx,
-                desc=f"valid [{epoch+1}/{NUM_EPOCHS}]",
+                desc=f"valid [{epoch+1}/{total_epochs}]",
             )
         )
 
         print(
-            f"Epoch [{epoch+1}/{NUM_EPOCHS}] "
+            f"Epoch [{epoch+1}/{total_epochs}] "
             f"Train Acc={train_acc:.4f} "
             f"Valid Acc={valid_acc:.4f}"
         )

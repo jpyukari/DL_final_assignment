@@ -6,6 +6,13 @@ NUM_EPOCHS = 25
 
 PATIENCE = 3
 
+# 最終提出用: True で train_split + valid_split を結合して全データ学習する。
+# valid が無いので early-stopping は使えず、FINAL_EPOCHS 分だけ固定で回す。
+# 運用: 開発(クリーンholdout)で early-stopping した epoch 数を FINAL_EPOCHS に入れ、
+#       TRAIN_ON_ALL=True で再学習 → best_model.pt を提出に使う。
+TRAIN_ON_ALL = False
+FINAL_EPOCHS = 10
+
 LR = 1e-4
 
 WEIGHT_DECAY = 1e-5
