@@ -384,6 +384,12 @@ def main():
         "./outputs/checkpoints/model.pt"
     )
 
+    # 学習完了後、そのまま推論→提出物生成→分析まで自動実行する。
+    # （inference は MODEL_PATH=best_model.pt を読むので、保存済みの best を使う）
+    print("=== train 完了。続けて inference を実行します ===")
+    import inference
+    inference.main()
+
 
 if __name__ == "__main__":
     main()
