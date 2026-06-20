@@ -261,12 +261,19 @@ def main():
 
     # クラス重みベクトルを構築（頻出ラベルの loss を下げる）
     class_weights = torch.ones(len(train_dataset.answer2idx))
+    applied = {}
     for label, w in CLASS_WEIGHTS.items():
         idx = train_dataset.answer2idx.get(label)
         if idx is not None:
             class_weights[idx] = w
+            if w != 1.0:
+                applied[label] = w
         else:
             print(f"[warn] CLASS_WEIGHTS のラベル '{label}' は語彙に無いので無視")
+    if applied:
+        print(f"[class_weights] 適用(≠1.0): {applied}")
+    else:
+        print("[class_weights] 全て 1.0 = 無効（CLASS_WEIGHTS を変えても学習は変わりません）")
     class_weights = class_weights.to(device)
 
     if LOSS_TYPE == "hard":
