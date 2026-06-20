@@ -1,12 +1,12 @@
 SEED = 42
 
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 
-NUM_EPOCHS = 15
+NUM_EPOCHS = 25
 
 PATIENCE = 3
 
-LR = 1e-3
+LR = 1e-4
 
 WEIGHT_DECAY = 1e-5
 
@@ -24,9 +24,9 @@ EXCLUDE_UNANSWERABLE = False
 # 未指定ラベルは 1.0。空 dict {} で無効（全クラス 1.0）。hard/soft 両対応。
 # 例: unanswerable/yes/no が多すぎるので学習時のペナルティを軽くする。
 CLASS_WEIGHTS = {
-    "unanswerable": 0.9,
-    "yes": 1.5,
-    "no": 1.5,
+    "unanswerable": 1.0,
+    "yes": 1,
+    "no": 1,
 }
 
 # 推論時に unanswerable の logit から引く値（学習はそのまま、推論だけ抑制）。
@@ -39,7 +39,7 @@ UNANSWERABLE_LOGIT_BIAS = 0.0
 # 1 で従来どおり全回答をクラス化。標準的な VQA は 8〜10 程度。
 #   ≥1:40244  ≥3:7141  ≥5:4319  ≥8:2521  ≥10:1745 クラス
 # min が大きいほど <unk> 行きが増える（mode が <unk>: min3=18.7% / min8=30.9%）
-MIN_ANSWER_COUNT = 3
+MIN_ANSWER_COUNT = 1
 
 IMAGE_SIZE = 224
 
