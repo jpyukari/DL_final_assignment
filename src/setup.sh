@@ -1,6 +1,6 @@
 #!/bin/bash
-import numpy as np
-import scikit-learn as sklearn
+
+pip install scikit-learn
 
 echo "=== Install packages ==="
 
