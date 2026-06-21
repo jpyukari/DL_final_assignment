@@ -46,7 +46,7 @@ UNANSWERABLE_LOGIT_BIAS = 0.0
 # 1 で従来どおり全回答をクラス化。標準的な VQA は 8〜10 程度。
 #   ≥1:40244  ≥3:7141  ≥5:4319  ≥8:2521  ≥10:1745 クラス
 # min が大きいほど <unk> 行きが増える（mode が <unk>: min3=18.7% / min8=30.9%）
-MIN_ANSWER_COUNT = 1
+MIN_ANSWER_COUNT = 8
 
 IMAGE_SIZE = 224
 

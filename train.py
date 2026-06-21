@@ -10,7 +10,7 @@ from tqdm import tqdm
 from configs.baseline import *
 
 from src.dataset import VQADataset
-from src.metrics import VQA_criterion
+from src.metrics import VQA_criterion, leaderboard_faithful_acc
 from src.utils import set_seed, build_transform
 
 from src.models.baseline import VQAModel
@@ -121,6 +121,7 @@ def validate(
     total_loss = 0
     total_acc = 0
     total_simple_acc = 0
+    all_preds = []  # honest acc 用に予測 idx を順序通り収集
 
     start = time.time()
 
@@ -155,6 +156,8 @@ def validate(
 
         total_loss += loss.item()
 
+        all_preds.extend(pred.argmax(1).cpu().tolist())
+
         total_acc += VQA_criterion(
             pred.argmax(1),
             answers
@@ -169,6 +172,7 @@ def validate(
         total_acc / len(dataloader),
         total_simple_acc / len(dataloader),
         time.time() - start,
+        all_preds,
     )
 
 
@@ -340,7 +344,7 @@ def main():
             )
             continue
 
-        valid_loss, valid_acc, valid_simple_acc, valid_time = (
+        valid_loss, valid_acc, valid_simple_acc, valid_time, valid_preds = (
             validate(
                 model,
                 valid_loader,
@@ -351,10 +355,18 @@ def main():
             )
         )
 
+        # honest acc（<unk>→unanswerable 変換＋元文字列照合）= public と整合する指標。
+        # index 照合の valid_acc は <unk> 同士一致で過大評価されるので、
+        # best モデル選択・early-stopping はこちらで行う。
+        valid_faithful = leaderboard_faithful_acc(
+            valid_preds, valid_dataset, train_dataset.idx2answer
+        )
+
         print(
             f"Epoch [{epoch+1}/{total_epochs}] "
             f"Train Acc={train_acc:.4f} "
-            f"Valid Acc={valid_acc:.4f}"
+            f"Valid Acc(index)={valid_acc:.4f} "
+            f"Valid Acc(honest/LB)={valid_faithful:.4f}"
         )
 
         if not math.isfinite(valid_loss):
@@ -363,8 +375,8 @@ def main():
                 "発散したモデルを best として保存しないため停止します。"
             )
 
-        if valid_acc > best_acc:
-            best_acc = valid_acc
+        if valid_faithful > best_acc:
+            best_acc = valid_faithful
             epochs_no_improve = 0
             torch.save(
                 model.state_dict(),
@@ -374,13 +386,13 @@ def main():
             epochs_no_improve += 1
             print(
                 f"No improvement for {epochs_no_improve}/{PATIENCE} "
-                f"epoch(s) (best Valid Acc={best_acc:.4f})"
+                f"epoch(s) (best honest Valid Acc={best_acc:.4f})"
             )
 
             if epochs_no_improve >= PATIENCE:
                 print(
                     f"Early stopping at epoch {epoch+1} "
-                    f"(best Valid Acc={best_acc:.4f})"
+                    f"(best honest Valid Acc={best_acc:.4f})"
                 )
                 break
 
