@@ -11,7 +11,9 @@ from torchvision import transforms
 from statistics import mode
 from collections import Counter
 
-from configs.baseline import EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT
+from configs.baseline import (
+    EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT, MINORITY_MAX_COUNT,
+)
 
 UNK_ANSWER = "<unk>"
 
@@ -67,8 +69,10 @@ class VQADataset(torch.utils.data.Dataset):
     """
     VQA データセットを扱うためのクラス．
     """
-    def __init__(self, df_path, image_dir, transform=None, answer=True):
-        self.transform = transform  # 画像の前処理
+    def __init__(self, df_path, image_dir, transform=None, answer=True,
+                 strong_transform=None):
+        self.transform = transform  # 画像の前処理（軽い aug もしくは eval）
+        self.strong_transform = strong_transform  # 少数クラス向けの強い aug（任意）
         self.image_dir = image_dir  # 画像ファイルのディレクトリ
         # df_path は単一パスでも、複数パスのリスト（全データ学習用に train+valid 結合）でも可
         if isinstance(df_path, (list, tuple)):
@@ -85,6 +89,7 @@ class VQADataset(torch.utils.data.Dataset):
         self.answer2idx = {}
         self.idx2question = {}
         self.idx2answer = {}
+        self.minority_answer_idx = set()  # 強い aug 対象（answer=True 時に構築）
 
         # 質問文に含まれる単語を辞書に追加
         for question in self.df["question"]:
@@ -111,6 +116,15 @@ class VQADataset(torch.utils.data.Dataset):
             self.answer2idx[UNK_ANSWER] = len(self.answer2idx)
 
             self.idx2answer = {v: k for k, v in self.answer2idx.items()}  # 逆変換用の辞書(answer)
+
+            # 少数クラス集合（強い aug 対象）。
+            # 語彙に残った（count>=MIN_ANSWER_COUNT）かつ低頻度（<=MINORITY_MAX_COUNT）のクラス。
+            # <unk> は多数の希少回答の集約なので対象外。
+            self.minority_answer_idx = {
+                self.answer2idx[word]
+                for word, count in answer_counter.items()
+                if word in self.answer2idx and count <= MINORITY_MAX_COUNT
+            }
 
     def update_dict(self, dataset):
         """
@@ -146,8 +160,9 @@ class VQADataset(torch.utils.data.Dataset):
         mode_answer_idx : torch.Tensor  (1)
             10人の回答者の回答の中で最頻値の回答のid
         """
+        # 画像は mode_answer（少数クラス判定）を求めてから transform を選ぶため、
+        # ここでは PIL のまま読み込んでおく。
         image = Image.open(f"{self.image_dir}/{self.df['image'][idx]}").convert("RGB")
-        image = self.transform(image)
         question = np.zeros(len(self.idx2question) + 1)  # 未知語用の要素を追加
         question_words = process_text(self.df["question"][idx]).split(" ")
         for word in question_words:
@@ -180,8 +195,18 @@ class VQADataset(torch.utils.data.Dataset):
             else:
                 mode_answer_idx = mode(answers)
 
+            # 少数クラスのサンプルだけ強い aug を使う（strong_transform がある時のみ）
+            if (
+                self.strong_transform is not None
+                and mode_answer_idx in self.minority_answer_idx
+            ):
+                image = self.strong_transform(image)
+            else:
+                image = self.transform(image)
+
             return {"image": image, "question": torch.Tensor(question),"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
         else:
+            image = self.transform(image)
             return {"image": image, "question": torch.Tensor(question)}
 
     def __len__(self):

@@ -31,9 +31,9 @@ EXCLUDE_UNANSWERABLE = False
 # 未指定ラベルは 1.0。空 dict {} で無効（全クラス 1.0）。hard/soft 両対応。
 # 例: unanswerable/yes/no が多すぎるので学習時のペナルティを軽くする。
 CLASS_WEIGHTS = {
-    "unanswerable": 1.0,
-    "yes": 1,
-    "no": 1,
+    "unanswerable": 0.8,
+    "yes": 3,
+    "no": 3,
 }
 
 # 推論時に unanswerable の logit から引く値（学習はそのまま、推論だけ抑制）。
@@ -49,6 +49,14 @@ UNANSWERABLE_LOGIT_BIAS = 0.0
 MIN_ANSWER_COUNT = 1
 
 IMAGE_SIZE = 224
+
+# データ拡張（学習時のみ。inference/analyze には適用しない）。
+# 色相(hue)は触らない: 色を答える質問が多く、hue揺らしは正解を壊すため。
+AUGMENT = True
+# 少数クラス対策: train 頻度がこの値以下のクラスのサンプルには、
+# 通常の軽い aug ではなく「強い aug」を per-sample で適用して多様性を稼ぐ。
+# 0 で無効（全データ一律の軽い aug のみ）。<unk> は対象外。
+MINORITY_MAX_COUNT = 50
 
 # 画像の正規化（ToTensor の後に適用）。train/inference/analyze で共通化される。
 # True にする場合、学習・推論・分析の全てで同じ統計が使われる。

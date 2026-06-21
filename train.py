@@ -193,7 +193,10 @@ def main():
 
     print("4")
 
-    transform = build_transform()
+    # 学習は aug あり、推論/検証は aug なし（eval）。少数クラスには強い aug。
+    train_transform = build_transform(train=True)
+    strong_transform = build_transform(train=True, strong=True)
+    eval_transform = build_transform(train=False)
 
     # TRAIN_ON_ALL: train_split + valid_split を結合して全データ学習（最終提出用）
     train_df_path = (
@@ -207,7 +210,9 @@ def main():
 
         image_dir="./data/train",
 
-        transform=transform,
+        transform=train_transform,
+
+        strong_transform=strong_transform,
 
     )
 
@@ -223,7 +228,7 @@ def main():
 
             image_dir="./data/train",
 
-            transform=transform,
+            transform=eval_transform,
 
         )
         print("6")
