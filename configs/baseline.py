@@ -48,7 +48,7 @@ UNANSWERABLE_LOGIT_BIAS = 0.0
 # min が大きいほど <unk> 行きが増える（mode が <unk>: min3=18.7% / min8=30.9%）
 MIN_ANSWER_COUNT = 8
 
-IMAGE_SIZE = 224
+IMAGE_SIZE = 360
 
 # データ拡張（学習時のみ。inference/analyze には適用しない）。
 # 色相(hue)は触らない: 色を答える質問が多く、hue揺らしは正解を壊すため。
@@ -75,7 +75,8 @@ RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet5
 # 自己教師あり事前学習で得たバックボーン重みのパス。None でスクラッチ。
 # 生成: python -m src.ssl_pretrain  → ./outputs/checkpoints/ssl_backbone.pt
 # RESNET と同じ種別の重みであること（resnet50 で SSL したら resnet50 で使う）。
-PRETRAINED_BACKBONE = None
+PRETRAINED_BACKBONE = PRETRAINED_BACKBONE = "./outputs/checkpoints/ssl_backbone.pt"
+
 
 MODEL_PATH = "./outputs/checkpoints/best_model.pt"
 NOTEBOOK_PATH = "./DL_Basic_2026_Spring_competition_VQA.ipynb"
