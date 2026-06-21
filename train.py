@@ -258,6 +258,19 @@ def main():
         n_answer=len(train_dataset.answer2idx),
         backbone=RESNET,
     )
+
+    # 自己教師あり事前学習のバックボーン重みを初期値としてロード（あれば）。
+    # ラベルは使っていない＝普遍的特徴の流用なので規則の範囲内。
+    if PRETRAINED_BACKBONE:
+        sd = torch.load(PRETRAINED_BACKBONE, map_location="cpu")
+        missing, unexpected = model.resnet.load_state_dict(sd, strict=False)
+        print(
+            f"[SSL] backbone をロード: {PRETRAINED_BACKBONE} "
+            f"(missing={len(missing)}, unexpected={len(unexpected)})"
+        )
+    else:
+        print("[SSL] PRETRAINED_BACKBONE 未設定 → スクラッチ学習")
+
     unanswerable_idx = (
         train_dataset.answer2idx.get("unanswerable")
         if EXCLUDE_UNANSWERABLE else None

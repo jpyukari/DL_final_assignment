@@ -72,5 +72,10 @@ EXP_NAME = "baseline"
 
 RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet50"
 
+# 自己教師あり事前学習で得たバックボーン重みのパス。None でスクラッチ。
+# 生成: python -m src.ssl_pretrain  → ./outputs/checkpoints/ssl_backbone.pt
+# RESNET と同じ種別の重みであること（resnet50 で SSL したら resnet50 で使う）。
+PRETRAINED_BACKBONE = None
+
 MODEL_PATH = "./outputs/checkpoints/best_model.pt"
 NOTEBOOK_PATH = "./DL_Basic_2026_Spring_competition_VQA.ipynb"
