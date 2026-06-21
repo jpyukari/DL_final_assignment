@@ -375,11 +375,16 @@ def main():
             valid_preds, valid_dataset, train_dataset.idx2answer
         )
 
+        # 崩壊（collapse）指標: valid で実際に予測された distinct ラベル数。
+        # 小さい（数〜十数）ほど少数クラスへの崩壊が進んでいる＝悪い。
+        distinct_preds = len(set(valid_preds))
+
         print(
             f"Epoch [{epoch+1}/{total_epochs}] "
             f"Train Acc={train_acc:.4f} "
             f"Valid Acc(index)={valid_acc:.4f} "
-            f"Valid Acc(honest/LB)={valid_faithful:.4f}"
+            f"Valid Acc(honest/LB)={valid_faithful:.4f} "
+            f"distinct_preds={distinct_preds}"
         )
 
         if not math.isfinite(valid_loss):

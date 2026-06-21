@@ -12,7 +12,7 @@ from statistics import mode
 from collections import Counter
 
 from configs.baseline import (
-    EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT, MINORITY_MAX_COUNT,
+    EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT, MINORITY_MAX_COUNT, MAX_QLEN,
 )
 
 UNK_ANSWER = "<unk>"
@@ -153,8 +153,9 @@ class VQADataset(torch.utils.data.Dataset):
         -------
         image : torch.Tensor  (C, H, W)
             画像データ
-        question : torch.Tensor  (vocab_size)
-            質問文をone-hot表現に変換したもの
+        question : torch.Tensor  (MAX_QLEN,) long
+            質問文を単語インデックス列にしたもの（Embedding+LSTM 用）。
+            未知語は UNK=len(question2idx)、空き要素は PAD=len(question2idx)+1。
         answers : torch.Tensor  (n_answer)
             10人の回答者の回答のid
         mode_answer_idx : torch.Tensor  (1)
@@ -163,13 +164,19 @@ class VQADataset(torch.utils.data.Dataset):
         # 画像は mode_answer（少数クラス判定）を求めてから transform を選ぶため、
         # ここでは PIL のまま読み込んでおく。
         image = Image.open(f"{self.image_dir}/{self.df['image'][idx]}").convert("RGB")
-        question = np.zeros(len(self.idx2question) + 1)  # 未知語用の要素を追加
+        # 質問を単語インデックス列にする（語順を保持。Embedding+LSTM 用）。
+        # UNK = 未知語の受け皿 = V、PAD = 空き要素 = V+1（V=語彙数）。
+        vocab = len(self.question2idx)
+        unk_idx = vocab
+        pad_idx = vocab + 1
         question_words = process_text(self.df["question"][idx]).split(" ")
-        for word in question_words:
-            try:
-                question[self.question2idx[word]] = 1  # one-hot表現に変換
-            except KeyError:
-                question[-1] = 1  # 未知語
+        q_ids = [
+            self.question2idx.get(word, unk_idx)
+            for word in question_words
+            if word != ""
+        ][:MAX_QLEN]
+        q_ids += [pad_idx] * (MAX_QLEN - len(q_ids))  # 末尾を PAD で埋める
+        question = torch.tensor(q_ids, dtype=torch.long)
 
         if self.answer:
             answer_texts = [
@@ -204,10 +211,10 @@ class VQADataset(torch.utils.data.Dataset):
             else:
                 image = self.transform(image)
 
-            return {"image": image, "question": torch.Tensor(question),"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
+            return {"image": image, "question": question,"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
         else:
             image = self.transform(image)
-            return {"image": image, "question": torch.Tensor(question)}
+            return {"image": image, "question": question}
 
     def __len__(self):
         return len(self.df)

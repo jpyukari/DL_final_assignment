@@ -30,7 +30,10 @@ EXCLUDE_UNANSWERABLE = False
 # クラス重み: 頻出ラベルの loss を下げて過適応（量産）を防ぐ。{ラベル: 重み}。
 # 未指定ラベルは 1.0。空 dict {} で無効（全クラス 1.0）。hard/soft 両対応。
 # 例: unanswerable/yes/no が多すぎるので学習時のペナルティを軽くする。
+# <unk> は希少回答の寄せ集めで最大の「ゴミ箱クラス」。重みを下げて、
+# 予測が <unk>/unanswerable の2クラスに崩壊するのを防ぐ。
 CLASS_WEIGHTS = {
+    "<unk>": 0.3,
     "unanswerable": 0.8,
     "yes": 3,
     "no": 3,
@@ -46,7 +49,14 @@ UNANSWERABLE_LOGIT_BIAS = 0.0
 # 1 で従来どおり全回答をクラス化。標準的な VQA は 8〜10 程度。
 #   ≥1:40244  ≥3:7141  ≥5:4319  ≥8:2521  ≥10:1745 クラス
 # min が大きいほど <unk> 行きが増える（mode が <unk>: min3=18.7% / min8=30.9%）
-MIN_ANSWER_COUNT = 8
+# 8→3 に下げて <unk> 吸い込みを 30.9%→18.7% に減らし、実ラベルを増やす
+# （崩壊対策。クラス数 2521→7141 に増える）。
+MIN_ANSWER_COUNT = 3
+
+# 質問文の系列長。Embedding+LSTM のテキストエンコーダ用に、質問を
+# 単語インデックス列としてこの長さに切り詰め／パディングする。
+# （旧 bag-of-words 1層 Linear からの置き換え。語順を使えるようになる。）
+MAX_QLEN = 20
 
 IMAGE_SIZE = 360
 
