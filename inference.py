@@ -9,9 +9,9 @@ from tqdm import tqdm
 
 from configs.baseline import *
 
-from src.dataset import VQADataset, UNK_ANSWER
+from src.dataset import VQADataset, UNK_ANSWER, process_text
 from src.models.baseline import VQAModel
-from src.utils import build_transform
+from src.utils import build_transform, apply_unanswerable_bias
 
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -87,16 +87,18 @@ def main():
     model.eval()
 
     unanswerable_idx = train_dataset.answer2idx.get("unanswerable")
-    if UNANSWERABLE_LOGIT_BIAS and unanswerable_idx is not None:
+    if (UNANSWERABLE_BIAS_BY_QTYPE or UNANSWERABLE_BIAS_DEFAULT) \
+            and unanswerable_idx is not None:
         print(
-            f"unanswerable logit を -{UNANSWERABLE_LOGIT_BIAS} 補正します "
-            f"(idx={unanswerable_idx})"
+            f"unanswerable logit をタイプ別補正します "
+            f"(default={UNANSWERABLE_BIAS_DEFAULT}, by_qtype={UNANSWERABLE_BIAS_BY_QTYPE})"
         )
 
     submission = []
 
     print("start inference...")
 
+    sample_i = 0  # shuffle=False 前提。df の行に対応させて質問タイプを引く
     with torch.no_grad():
 
         for batch in tqdm(test_loader, desc="inference"):
@@ -109,8 +111,17 @@ def main():
                 question
             )
 
-            if UNANSWERABLE_LOGIT_BIAS and unanswerable_idx is not None:
-                pred[:, unanswerable_idx] -= UNANSWERABLE_LOGIT_BIAS
+            # この batch に対応する質問文（タイプ別 unanswerable 補正用）
+            bs = pred.shape[0]
+            qtexts = [
+                process_text(test_dataset.df["question"][sample_i + j])
+                for j in range(bs)
+            ]
+            apply_unanswerable_bias(
+                pred, qtexts, unanswerable_idx,
+                UNANSWERABLE_BIAS_BY_QTYPE, UNANSWERABLE_BIAS_DEFAULT,
+            )
+            sample_i += bs
 
             pred = pred.argmax(1).item()
 

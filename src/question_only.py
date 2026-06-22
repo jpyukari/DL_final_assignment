@@ -26,29 +26,7 @@ import torch.nn as nn
 from configs.baseline import MAX_QLEN, CLASS_WEIGHTS, SEED, BATCH_SIZE
 from src.dataset import VQADataset, process_text, UNK_ANSWER
 from src.metrics import vqa_acc_string
-from src.utils import set_seed
-
-
-# ---- 質問の意味タイプ分類（実験2/3 用）。先頭句ベースの粗い分類 ----
-def question_type(q):
-    """正規化済み質問文 q を粗い意味タイプに分類する。"""
-    w = q.split(" ") if q else []
-    head = w[0] if w else ""
-    head2 = " ".join(w[:2])
-    if "color" in q or "colour" in q:
-        return "color"
-    if head2 in ("how many", "how much") or "how many" in q:
-        return "count"
-    if "brand" in q:
-        return "brand"
-    if head in ("is", "are", "was", "were", "do", "does", "did",
-                "can", "could", "will", "would", "should", "has", "have"):
-        return "yes/no"
-    if head == "what":
-        return "what(other)"
-    if head in ("where", "who", "when", "why", "which", "how"):
-        return head
-    return "other"
+from src.utils import set_seed, question_type  # question_type は utils に集約
 
 
 def build_question_tensor(text, question2idx, max_qlen):

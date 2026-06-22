@@ -39,10 +39,19 @@ CLASS_WEIGHTS = {
     "no": 3,
 }
 
-# 推論時に unanswerable の logit から引く値（学習はそのまま、推論だけ抑制）。
-# 0.0 で無効。大きいほど unanswerable を出しにくくなる。
-# 最適値は valid で選べる:  python -m src.sweep_unanswerable
-UNANSWERABLE_LOGIT_BIAS = 0.0
+# 推論時、質問タイプ別に unanswerable の logit に「足す」値（学習は不変・推論だけ調整）。
+#   値 > 0: そのタイプで unanswerable を出しやすく（answerable率が低い count 等）
+#   値 < 0: 出しにくく（answerable率が高い color 等）
+# タイプ分類は src.utils.question_type（color/count/yes-no/what(other)/...）。
+# 未指定タイプには UNANSWERABLE_BIAS_DEFAULT を使う。空 dict + default 0.0 で無効。
+# 最適値は valid で自動探索:  python -m src.sweep_unanswerable
+#   （タイプ別に honest acc を最大化する bias を出し、この dict 形式で表示する）
+UNANSWERABLE_BIAS_BY_QTYPE = {
+    # 例（sweep の結果を貼る）:
+    # "count": 3.0,    # ほぼ unanswerable が正解
+    # "color": -1.5,   # 画像で答えられるので unanswerable に逃がさない
+}
+UNANSWERABLE_BIAS_DEFAULT = 0.0
 
 # 回答語彙の最低出現回数。train でこの回数以上出た回答だけをクラスにする。
 # それ未満の希少回答は "<unk>" にまとめる（1例しかないラベルは学習不能なため）。

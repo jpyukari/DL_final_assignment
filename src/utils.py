@@ -49,6 +49,54 @@ def build_transform(train=False, strong=False):
     return transforms.Compose(ops)
 
 
+def question_type(q):
+    """正規化済み質問文 q を粗い意味タイプに分類する。
+    質問タイプ別の unanswerable 補正（推論）や診断の集計に使う。"""
+    w = q.split(" ") if q else []
+    head = w[0] if w else ""
+    head2 = " ".join(w[:2])
+    if "color" in q or "colour" in q:
+        return "color"
+    if head2 in ("how many", "how much") or "how many" in q:
+        return "count"
+    if "brand" in q:
+        return "brand"
+    if head in ("is", "are", "was", "were", "do", "does", "did",
+                "can", "could", "will", "would", "should", "has", "have"):
+        return "yes/no"
+    if head == "what":
+        return "what(other)"
+    if head in ("where", "who", "when", "why", "which", "how"):
+        return head
+    return "other"
+
+
+def apply_unanswerable_bias(logits, qtexts, unanswerable_idx,
+                            by_qtype, default_bias=0.0):
+    """質問タイプ別に unanswerable の logit を調整する（推論時のみ。学習は不変）。
+
+    logits[i, unanswerable_idx] += bias を行う。
+      bias > 0: その質問タイプで unanswerable を出しやすく（answerable率が低い count 等）
+      bias < 0: 出しにくく（answerable率が高い color 等）
+    bias は by_qtype[type] を引き、無ければ default_bias。
+
+    Parameters
+    ----------
+    logits : torch.Tensor  (N, C)  ※ in-place で書き換える
+    qtexts : list[str]     process_text 済みの質問文（len==N）
+    unanswerable_idx : int | None  None なら何もしない
+    by_qtype : dict        {質問タイプ: bias}
+    default_bias : float   未指定タイプに使う bias
+    """
+    if unanswerable_idx is None:
+        return logits
+    for i, q in enumerate(qtexts):
+        b = by_qtype.get(question_type(q), default_bias)
+        if b:
+            logits[i, unanswerable_idx] += b
+    return logits
+
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)

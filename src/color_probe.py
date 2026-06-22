@@ -36,8 +36,7 @@ from configs.baseline import (
 from src.dataset import VQADataset, process_text, UNK_ANSWER
 from src.models.resnet import ResNet18, ResNet34, ResNet50
 from src.metrics import vqa_acc_string
-from src.question_only import question_type
-from src.utils import set_seed
+from src.utils import set_seed, question_type
 
 from torchvision import transforms
 
