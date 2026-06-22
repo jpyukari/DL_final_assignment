@@ -80,6 +80,11 @@ NORM_STD = [0.229, 0.224, 0.225]
 MODEL = "baseline"
 EXP_NAME = "baseline"
 
+# 画像だけ probe（src.color_probe）が対象にする質問タイプ。
+#   "color" / "count" / "yes/no" / "what(other)" など（src.question_only の分類）。
+# 画像だけで当てられるか＝画像に情報があるかを測る。config で対象を切替可能。
+PROBE_QTYPE = "color"
+
 # 画像と質問の融合方式（VQAModel が参照）。
 #   "concat"          : 画像をavgpoolした512次元と質問特徴を連結（従来）。
 #                       画像を1ベクトルに潰すので「どこを見るか」を質問で選べない。
