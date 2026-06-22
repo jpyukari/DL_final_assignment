@@ -103,6 +103,13 @@ PROBE_QTYPE = "color"
 # cross_attention は画像情報を答えに効かせるための本命。
 FUSION = "concat"
 
+# #3「画像を捨てさせない学習」: 画像プール特徴だけから回答を予測する補助ヘッドを付け、
+# 総ロス = 主ロス + AUX_IMAGE_LOSS_WEIGHT × 画像onlyロス。
+# 画像branch に必ず勾配を流し、言語prior へのショートカット（画像無視）を防ぐ。
+# 0.0 で無効。0.3〜1.0 程度から。推論には影響しない（補助ヘッドは推論で未使用）。
+# 注意: train と inference で ≷0 を揃えること（アーキテクチャが変わるため）。
+AUX_IMAGE_LOSS_WEIGHT = 0.0
+
 RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet50"
 
 # 自己教師あり事前学習で得たバックボーン重みのパス。None でスクラッチ。
@@ -111,5 +118,15 @@ RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet5
 PRETRAINED_BACKBONE = PRETRAINED_BACKBONE = "./outputs/checkpoints/ssl_backbone.pt"
 
 
+# train.py を1回実行するだけで最後まで走らせるための自動化（inference.main が参照）。
+# AUTO_SWEEP_UNANSWERABLE: 推論前に valid でタイプ別 unanswerable bias を自動探索し、
+#   その結果を提出に適用する（手動 sweep→config 貼り付けが不要に）。
+#   TRAIN_ON_ALL 時は valid が学習に含まれ過学習なので無効化される。
+#   False のときは config の UNANSWERABLE_BIAS_BY_QTYPE をそのまま使う。
+# AUTO_BUILD_NOTEBOOK: 提出zip の前に統合Notebookを自動生成（未ビルドでも走り切る）。
+AUTO_SWEEP_UNANSWERABLE = True
+AUTO_BUILD_NOTEBOOK = True
+
 MODEL_PATH = "./outputs/checkpoints/best_model.pt"
 NOTEBOOK_PATH = "./DL_Basic_2026_Spring_competition_VQA.ipynb"
+

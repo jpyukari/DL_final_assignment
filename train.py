@@ -47,15 +47,21 @@ def train_one_epoch(
         answers = batch["answers"].to(device)
         mode_answer = batch["mode_answer"].to(device)
 
-        pred = model(image, question)
+        # #3: AUX_IMAGE_LOSS_WEIGHT>0 のとき画像onlyの補助予測も受け取る
+        use_aux = AUX_IMAGE_LOSS_WEIGHT > 0
+        if use_aux:
+            pred, aux = model(image, question, return_aux=True)
+        else:
+            pred = model(image, question)
 
-            
         if LOSS_TYPE == "hard":
 
             loss = criterion(
                 pred,
                 mode_answer
             )
+            if use_aux:
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, mode_answer)
 
         elif LOSS_TYPE == "soft":
 
@@ -69,6 +75,8 @@ def train_one_epoch(
                 pred,
                 soft_target
             )
+            if use_aux:
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, soft_target)
 
         else:
             raise ValueError(

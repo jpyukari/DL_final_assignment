@@ -87,11 +87,32 @@ def main():
     model.eval()
 
     unanswerable_idx = train_dataset.answer2idx.get("unanswerable")
-    if (UNANSWERABLE_BIAS_BY_QTYPE or UNANSWERABLE_BIAS_DEFAULT) \
-            and unanswerable_idx is not None:
+
+    # 提出に使う unanswerable bias を決定。
+    # AUTO_SWEEP_UNANSWERABLE: valid_split でタイプ別 best bias を自動探索して採用
+    # （手動 sweep→config 貼り付けが不要）。TRAIN_ON_ALL 時は valid が学習に含まれ
+    # 過学習になるので無効化し、config の値を使う。
+    bias_by_qtype = dict(UNANSWERABLE_BIAS_BY_QTYPE)
+    bias_default = UNANSWERABLE_BIAS_DEFAULT
+    if AUTO_SWEEP_UNANSWERABLE and not TRAIN_ON_ALL and unanswerable_idx is not None:
+        from src.sweep_unanswerable import sweep_biases
+        print("auto-sweep: valid_split でタイプ別 unanswerable bias を探索...")
+        valid_split = VQADataset(
+            df_path="./data/valid_split.json",
+            image_dir="./data/train",
+            transform=transform,
+        )
+        valid_split.update_dict(train_dataset)
+        bias_by_qtype, _, _, _ = sweep_biases(
+            model, valid_split, train_dataset.idx2answer,
+            unanswerable_idx, device, verbose=True,
+        )
+        bias_default = 0.0
+        print(f"auto-sweep 採用 bias: {bias_by_qtype}")
+    elif (bias_by_qtype or bias_default) and unanswerable_idx is not None:
         print(
-            f"unanswerable logit をタイプ別補正します "
-            f"(default={UNANSWERABLE_BIAS_DEFAULT}, by_qtype={UNANSWERABLE_BIAS_BY_QTYPE})"
+            f"config の unanswerable bias を使用 "
+            f"(default={bias_default}, by_qtype={bias_by_qtype})"
         )
 
     submission = []
@@ -119,7 +140,7 @@ def main():
             ]
             apply_unanswerable_bias(
                 pred, qtexts, unanswerable_idx,
-                UNANSWERABLE_BIAS_BY_QTYPE, UNANSWERABLE_BIAS_DEFAULT,
+                bias_by_qtype, bias_default,
             )
             sample_i += bs
 
@@ -147,10 +168,19 @@ def main():
             f"(train.py を先に実行してください)"
         )
 
+    # 提出zip には統合Notebookが必須。未ビルドでも走り切るよう自動生成する。
+    if AUTO_BUILD_NOTEBOOK:
+        print("building submission notebook...")
+        try:
+            import runpy
+            runpy.run_path("build_notebook.py", run_name="__main__")
+        except Exception as e:
+            print(f"[warn] notebook 自動生成に失敗: {e}")
+
     if not os.path.exists(NOTEBOOK_PATH):
         raise FileNotFoundError(
             f"notebook not found: {NOTEBOOK_PATH} "
-            f"(提出には統合Notebookが必須です)"
+            f"(提出には統合Notebookが必須です。build_notebook.py を確認)"
         )
 
     with ZipFile(

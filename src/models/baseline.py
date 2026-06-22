@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from .resnet import ResNet18, ResNet34, ResNet50
 
-from configs.baseline import FUSION
+from configs.baseline import FUSION, AUX_IMAGE_LOSS_WEIGHT
 
 
 # config の RESNET 文字列から ResNet 生成関数を引くためのテーブル
@@ -76,6 +76,16 @@ class VQAModel(nn.Module):
             nn.Linear(512, n_answer)
         )
 
+        # 補助ヘッド（#3「画像を捨てさせない学習」）。画像プール特徴(512)だけから
+        # 回答を予測する。AUX_IMAGE_LOSS_WEIGHT>0 のときだけ作る。学習で
+        # 画像branch に必ず勾配を流し、言語prior へのショートカットを防ぐ。
+        # 推論では使わない（forward の return_aux=False で無視）。
+        # 注意: train と inference で AUX_IMAGE_LOSS_WEIGHT の ≷0 を揃えること
+        #       （FUSION と同様、アーキテクチャが変わるため。state_dict 整合）。
+        self.aux_image_fc = (
+            nn.Linear(self.d, n_answer) if AUX_IMAGE_LOSS_WEIGHT > 0 else None
+        )
+
     def _encode_question(self, question):
         """質問 → (トークン系列 (B,L,512), マスク (B,L,1), プール特徴 (B,512))。"""
         q = question.long()
@@ -84,18 +94,21 @@ class VQAModel(nn.Module):
         pooled = (lstm_out * mask).sum(1) / mask.sum(1).clamp(min=1.0)  # (B, 512)
         return lstm_out, mask, pooled
 
-    def forward(self, image, question):
+    def forward(self, image, question, return_aux=False):
         q_tokens, q_mask, q_pooled = self._encode_question(question)
+
+        # backbone は1回だけ通し、空間特徴とプールベクトルの両方を得る
+        # （concat/cross_attention/補助ヘッドで共有。二重forwardを避ける）。
+        feat_map = self.resnet.forward_features(image)         # (B, C, H, W)
+        pooled = self.resnet.avgpool(feat_map).flatten(1)      # (B, C)
+        img_vec = self.resnet.fc(pooled)                       # (B, 512) = resnet(image)
 
         if self.fusion == "concat":
             # 画像を1ベクトル(512)に潰して質問プール特徴と連結（従来方式）。
-            image_feature = self.resnet(image)  # (B, 512)
-            x = torch.cat([image_feature, q_pooled], dim=1)
+            x = torch.cat([img_vec, q_pooled], dim=1)
 
         else:  # cross_attention
-            feat = self.resnet.forward_features(image)  # (B, C, H, W)
-            feat = self.img_proj(feat)  # (B, d, H, W)
-            B, d, H, W = feat.shape
+            feat = self.img_proj(feat_map)  # (B, d, H, W)
             img_tokens = feat.flatten(2).transpose(1, 2)  # (B, HW, d)
 
             # 質問トークン(query)が画像トークン(key/value)に attention。
@@ -109,4 +122,9 @@ class VQAModel(nn.Module):
             grounded = (attended * q_mask).sum(1) / q_mask.sum(1).clamp(min=1.0)
             x = torch.cat([grounded, q_pooled], dim=1)
 
-        return self.fc(x)
+        logits = self.fc(x)
+        if return_aux:
+            # 画像プール特徴だけからの予測（#3 補助ロス用）。
+            aux = self.aux_image_fc(img_vec) if self.aux_image_fc is not None else None
+            return logits, aux
+        return logits

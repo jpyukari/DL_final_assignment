@@ -49,6 +49,75 @@ def collect_logits(model, dataset, device):
     return torch.cat(logits_all)
 
 
+DEFAULT_BIASES = [-4, -3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4]
+
+
+def sweep_biases(model, valid_dataset, idx2answer, unans, device,
+                 biases=None, min_support=5, verbose=True):
+    """valid_split で質問タイプ別に honest acc を最大化する unanswerable bias を探索。
+
+    train.py / inference.py からも呼べるよう関数化。
+    Returns: (best_bias: dict, base_acc: float, tuned_acc: float, rows: list)
+    """
+    biases = biases or DEFAULT_BIASES
+    logits = collect_logits(model, valid_dataset, device)  # (N, C)
+    N = logits.shape[0]
+
+    pred_str_of = [
+        "unanswerable" if idx2answer[i] == UNK_ANSWER else idx2answer[i]
+        for i in range(len(idx2answer))
+    ]
+    gt_strings = [
+        [process_text(a["answer"]) for a in valid_dataset.df["answers"][i]]
+        for i in range(N)
+    ]
+    qtypes = [question_type(process_text(valid_dataset.df["question"][i]))
+              for i in range(N)]
+    by_type = defaultdict(list)
+    for i, t in enumerate(qtypes):
+        by_type[t].append(i)
+
+    def honest_for(indices, bias):
+        if not indices:
+            return 0.0
+        sub = logits[indices].clone()
+        sub[:, unans] += bias
+        preds = sub.argmax(1).tolist()
+        return float(np.mean([
+            vqa_acc_string(pred_str_of[p], gt_strings[idx])
+            for p, idx in zip(preds, indices)
+        ]))
+
+    base_acc = honest_for(list(range(N)), 0.0)
+    best_bias, rows, chosen_total = {}, [], 0.0
+    for t in sorted(by_type, key=lambda k: -len(by_type[k])):
+        idxs = by_type[t]
+        acc0 = honest_for(idxs, 0.0)
+        n = len(idxs)
+        if n < min_support:
+            chosen_total += acc0 * n
+            rows.append((t, n, acc0, None, acc0))
+            continue
+        bb, ba = max(((b, honest_for(idxs, b)) for b in biases),
+                     key=lambda x: x[1])
+        if bb != 0.0 and ba > acc0:
+            best_bias[t] = bb
+        chosen_total += ba * n
+        rows.append((t, n, acc0, bb, ba))
+    tuned_acc = chosen_total / N
+
+    if verbose:
+        print(f"\n{'qtype':>12} | {'n':>4} | {'acc@0':>6} | {'best':>5} | "
+              f"{'acc@best':>8}")
+        print("-" * 50)
+        for t, n, acc0, bb, ba in rows:
+            bs = "--" if bb is None else f"{bb:.1f}"
+            print(f"{t:>12} | {n:>4} | {acc0:>6.3f} | {bs:>5} | {ba:>8.3f}")
+        print(f"\n全体 honest acc: {base_acc:.4f} → {tuned_acc:.4f} "
+              f"(gain=+{tuned_acc-base_acc:.4f})")
+    return best_bias, base_acc, tuned_acc, rows
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=MODEL_PATH)
@@ -91,70 +160,12 @@ def main():
     model.load_state_dict(state)
     model.eval()
 
-    print("collecting logits on valid_split...")
-    logits = collect_logits(model, valid_dataset, device)  # (N, C)
-    N = logits.shape[0]
+    print("collecting logits on valid_split & sweeping...")
+    best_bias, base_acc, tuned_acc, _ = sweep_biases(
+        model, valid_dataset, idx2answer, unans, device,
+        biases=args.biases, min_support=args.min_support, verbose=True,
+    )
 
-    # 文字列化（<unk>→unanswerable）と GT・タイプを前計算
-    pred_str_of = [
-        "unanswerable" if idx2answer[i] == UNK_ANSWER else idx2answer[i]
-        for i in range(len(idx2answer))
-    ]
-    gt_strings = [
-        [process_text(a["answer"]) for a in valid_dataset.df["answers"][i]]
-        for i in range(N)
-    ]
-    qtypes = [question_type(process_text(valid_dataset.df["question"][i]))
-              for i in range(N)]
-
-    # タイプ別にサンプル index をまとめる
-    by_type = defaultdict(list)
-    for i, t in enumerate(qtypes):
-        by_type[t].append(i)
-
-    def honest_for(indices, bias):
-        """indices の honest acc を、unanswerable に bias を足して評価。"""
-        if not indices:
-            return 0.0, 0
-        sub = logits[indices].clone()
-        sub[:, unans] += bias
-        preds = sub.argmax(1).tolist()
-        accs = [vqa_acc_string(pred_str_of[p], gt_strings[idx])
-                for p, idx in zip(preds, indices)]
-        return float(np.mean(accs)), len(indices)
-
-    # 全体ベースライン（bias 0）
-    base_acc, _ = honest_for(list(range(N)), 0.0)
-
-    print(f"\n{'qtype':>12} | {'n':>4} | {'acc@0':>6} | {'best':>5} | "
-          f"{'acc@best':>8} | gain")
-    print("-" * 58)
-
-    best_bias = {}
-    chosen_total = 0.0  # support 重み付き honest（best 適用後）
-    for t in sorted(by_type, key=lambda k: -len(by_type[k])):
-        idxs = by_type[t]
-        acc0, n = honest_for(idxs, 0.0)
-        if n < args.min_support:
-            # 少数タイプは default(0) 据え置き（過学習防止）
-            chosen_total += acc0 * n
-            print(f"{t:>12} | {n:>4} | {acc0:>6.3f} | {'--':>5} | "
-                  f"{acc0:>8.3f} | (support<{args.min_support})")
-            continue
-        # このタイプだけ bias を振って best を選ぶ
-        cand = [(b, honest_for(idxs, b)[0]) for b in args.biases]
-        bb, ba = max(cand, key=lambda x: x[1])
-        if bb != 0.0 and ba > acc0:
-            best_bias[t] = bb
-        chosen_total += ba * n
-        flag = "" if bb == 0 else f"  +{ba-acc0:.3f}"
-        print(f"{t:>12} | {n:>4} | {acc0:>6.3f} | {bb:>5.1f} | "
-              f"{ba:>8.3f} |{flag}")
-
-    tuned_acc = chosen_total / N
-
-    print(f"\n全体 honest acc: {base_acc:.4f} (bias無) → {tuned_acc:.4f} "
-          f"(タイプ別best)   gain=+{tuned_acc-base_acc:.4f}")
     print("\n--- configs/baseline.py に貼る ---")
     print("UNANSWERABLE_BIAS_BY_QTYPE = {")
     for t, b in best_bias.items():
