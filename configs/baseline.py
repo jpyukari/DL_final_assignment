@@ -80,6 +80,15 @@ NORM_STD = [0.229, 0.224, 0.225]
 MODEL = "baseline"
 EXP_NAME = "baseline"
 
+# 画像と質問の融合方式（VQAModel が参照）。
+#   "concat"          : 画像をavgpoolした512次元と質問特徴を連結（従来）。
+#                       画像を1ベクトルに潰すので「どこを見るか」を質問で選べない。
+#   "cross_attention" : 質問トークンが画像の空間特徴(H×W)に attention する。
+#                       color/count など「画像の特定箇所を見る」問題向け。
+# 診断（src.question_only）の結論: 質問priorは~0.59で飽和、伸びしろは画像側。
+# cross_attention は画像情報を答えに効かせるための本命。
+FUSION = "concat"
+
 RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet50"
 
 # 自己教師あり事前学習で得たバックボーン重みのパス。None でスクラッチ。
