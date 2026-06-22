@@ -182,6 +182,9 @@ def analyze(model_path, submission_npy=None, top_k=25, min_support=5, resnet=Non
             "BATCH_SIZE": BATCH_SIZE,
             "NUM_EPOCHS": NUM_EPOCHS,
             "IMAGE_SIZE": IMAGE_SIZE,
+            "FUSION": FUSION,
+            "AUX_IMAGE_LOSS_WEIGHT": AUX_IMAGE_LOSS_WEIGHT,
+            "MIN_ANSWER_COUNT": MIN_ANSWER_COUNT,
             "model_path": model_path,
         },
         "label_space": {
