@@ -24,7 +24,9 @@ WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
 
-LOSS_TYPE = "hard"
+# "hard": 最頻値1個を正解に CrossEntropy / "soft": 10人の回答のソフト分布で学習。
+# soft は VQA の採点（複数回答の部分点）に整合するので honest が伸びやすい。
+LOSS_TYPE = "soft"
 
 # True: 正解集計から "unanswerable" を除外する
 #   - hard: mode_answer を unanswerable 以外で取る
