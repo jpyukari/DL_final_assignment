@@ -15,6 +15,11 @@ FINAL_EPOCHS = 10
 
 LR = 1e-4
 
+# 事前学習バックボーン（ViT等）のfine-tune用に、backboneだけ LR を下げる倍率。
+# 画像encoder（vit.*/resnet.*）の学習率 = LR × BACKBONE_LR_MULT。
+# 事前学習特徴を壊さないため小さめ（0.05〜0.1）。1.0 で無効（全体同一LR）。
+BACKBONE_LR_MULT = 0.1
+
 WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
@@ -67,7 +72,8 @@ MIN_ANSWER_COUNT = 3
 # （旧 bag-of-words 1層 Linear からの置き換え。語順を使えるようになる。）
 MAX_QLEN = 20
 
-IMAGE_SIZE = 360
+# 画像サイズ。ViT-B/16 は 224 固定（パッチ16×14×14=196）。ViT利用時は 224 必須。
+IMAGE_SIZE = 224
 
 # データ拡張（学習時のみ。inference/analyze には適用しない）。
 # 色相(hue)は触らない: 色を答える質問が多く、hue揺らしは正解を壊すため。
@@ -110,12 +116,20 @@ FUSION = "concat"
 # 注意: train と inference で ≷0 を揃えること（アーキテクチャが変わるため）。
 AUX_IMAGE_LOSS_WEIGHT = 0.0
 
-RESNET = "resnet50"  # 画像エンコーダ: "resnet18" / "resnet34" / "resnet50"
+# 画像エンコーダの種別（VQAModel が参照）。
+#   "vit_b_16"  : ImageNet 事前学習 ViT-B/16 を fine-tune（推奨・本命）。
+#                 ルール: 事前学習モデルを「構成要素」として使い配布データでFTするのは可。
+#   "resnet18/34/50" : 自前スクラッチ ResNet（旧。~0.50 で頭打ち）。
+IMAGE_BACKBONE = "vit_b_16"
+
+RESNET = "resnet50"  # IMAGE_BACKBONE がスクラッチResNet時のみ有効
 
 # 自己教師あり事前学習で得たバックボーン重みのパス。None でスクラッチ。
 # 生成: python -m src.ssl_pretrain  → ./outputs/checkpoints/ssl_backbone.pt
 # RESNET と同じ種別の重みであること（resnet50 で SSL したら resnet50 で使う）。
-PRETRAINED_BACKBONE = PRETRAINED_BACKBONE = "./outputs/checkpoints/ssl_backbone.pt"
+# SSL バックボーン（スクラッチResNet用）。ViT利用時は不要なので None。
+# （ViT は IMAGE_BACKBONE で ImageNet 重みを直接ロードするため）
+PRETRAINED_BACKBONE = None
 
 
 # train.py を1回実行するだけで最後まで走らせるための自動化（inference.main が参照）。

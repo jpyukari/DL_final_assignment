@@ -267,15 +267,17 @@ def main():
         backbone=RESNET,
     )
 
-    # 自己教師あり事前学習のバックボーン重みを初期値としてロード（あれば）。
-    # ラベルは使っていない＝普遍的特徴の流用なので規則の範囲内。
-    if PRETRAINED_BACKBONE:
+    # 自己教師あり事前学習のバックボーン重みを初期値としてロード（スクラッチResNet用）。
+    # ViT 利用時は model.resnet が無く、ImageNet 重みを直接ロード済みなので skip。
+    if PRETRAINED_BACKBONE and hasattr(model, "resnet"):
         sd = torch.load(PRETRAINED_BACKBONE, map_location="cpu")
         missing, unexpected = model.resnet.load_state_dict(sd, strict=False)
         print(
             f"[SSL] backbone をロード: {PRETRAINED_BACKBONE} "
             f"(missing={len(missing)}, unexpected={len(unexpected)})"
         )
+    elif getattr(model, "use_vit", False):
+        print("[backbone] ImageNet 事前学習 ViT-B/16 を fine-tune します")
     else:
         print("[SSL] PRETRAINED_BACKBONE 未設定 → スクラッチ学習")
 
@@ -320,11 +322,27 @@ def main():
             f"Unknown LOSS_TYPE: {LOSS_TYPE}"
         )
 
+    # 事前学習バックボーン（vit.*/resnet.*）は LR を下げて fine-tune し、
+    # 新規ヘッド（LSTM/融合/fc 等）は通常 LR で学習する param group を作る。
+    backbone_params, head_params = [], []
+    for name, p in model.named_parameters():
+        if name.startswith("vit.") or name.startswith("resnet."):
+            backbone_params.append(p)
+        else:
+            head_params.append(p)
+    param_groups = [{"params": head_params, "lr": LR}]
+    if backbone_params:
+        param_groups.append(
+            {"params": backbone_params, "lr": LR * BACKBONE_LR_MULT})
+    print(
+        f"[optim] head lr={LR}, backbone lr={LR * BACKBONE_LR_MULT} "
+        f"(n_backbone={len(backbone_params)}, n_head={len(head_params)})"
+    )
+
     if OPTIMIZER == "adam":
 
         optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=LR,
+            param_groups,
             weight_decay=WEIGHT_DECAY,
         )
 
