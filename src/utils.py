@@ -6,22 +6,95 @@ import torch
 
 from torchvision import transforms
 
-from configs.baseline import IMAGE_SIZE, NORMALIZE, NORM_MEAN, NORM_STD
+from configs.baseline import (
+    IMAGE_SIZE, NORMALIZE, NORM_MEAN, NORM_STD, AUGMENT,
+)
 
 
-def build_transform():
-    """train / inference / analyze 共通の画像前処理を返す。
+def build_transform(train=False, strong=False):
+    """画像前処理を返す。
 
-    NORMALIZE フラグで Normalize の有無を切り替える。3 箇所で同じ
-    前処理を使うことで、学習時と推論時の分布ズレを防ぐ。
+    - train=False（既定）: Resize→ToTensor(→Normalize)。inference/analyze 用。
+      推論はランダム性を入れたくないので必ずこれ。
+    - train=True かつ AUGMENT=True: 全データ共通の「軽い aug」を付与。
+      色を答える質問が多いので hue/saturation は揺らさない（色回答の保護）。
+    - train=True かつ strong=True: 少数クラス向けの「強い aug」を上乗せ
+      （ブラー・遠近変形）。VizWiz のブレ/構図崩れにも効く。
+
+    NORMALIZE で Normalize の有無を切替。学習時と推論時で Resize/Normalize
+    が共通なので分布ズレは起きない（変わるのは aug の有無のみ）。
     """
-    ops = [
-        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-        transforms.ToTensor(),
-    ]
+    if train and AUGMENT:
+        # 軽い aug（全データ共通）
+        ops = [
+            transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.85, 1.0)),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2),  # hue/sat はゼロ
+        ]
+        if strong:
+            # 少数クラス向けの追加 aug（より強い変形で多様性を稼ぐ）
+            ops += [
+                transforms.RandomApply(
+                    [transforms.GaussianBlur(kernel_size=5)], p=0.4
+                ),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.4),
+                transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.7, 1.0)),
+            ]
+    else:
+        ops = [transforms.Resize((IMAGE_SIZE, IMAGE_SIZE))]
+
+    ops.append(transforms.ToTensor())
     if NORMALIZE:
         ops.append(transforms.Normalize(mean=NORM_MEAN, std=NORM_STD))
     return transforms.Compose(ops)
+
+
+def question_type(q):
+    """正規化済み質問文 q を粗い意味タイプに分類する。
+    質問タイプ別の unanswerable 補正（推論）や診断の集計に使う。"""
+    w = q.split(" ") if q else []
+    head = w[0] if w else ""
+    head2 = " ".join(w[:2])
+    if "color" in q or "colour" in q:
+        return "color"
+    if head2 in ("how many", "how much") or "how many" in q:
+        return "count"
+    if "brand" in q:
+        return "brand"
+    if head in ("is", "are", "was", "were", "do", "does", "did",
+                "can", "could", "will", "would", "should", "has", "have"):
+        return "yes/no"
+    if head == "what":
+        return "what(other)"
+    if head in ("where", "who", "when", "why", "which", "how"):
+        return head
+    return "other"
+
+
+def apply_unanswerable_bias(logits, qtexts, unanswerable_idx,
+                            by_qtype, default_bias=0.0):
+    """質問タイプ別に unanswerable の logit を調整する（推論時のみ。学習は不変）。
+
+    logits[i, unanswerable_idx] += bias を行う。
+      bias > 0: その質問タイプで unanswerable を出しやすく（answerable率が低い count 等）
+      bias < 0: 出しにくく（answerable率が高い color 等）
+    bias は by_qtype[type] を引き、無ければ default_bias。
+
+    Parameters
+    ----------
+    logits : torch.Tensor  (N, C)  ※ in-place で書き換える
+    qtexts : list[str]     process_text 済みの質問文（len==N）
+    unanswerable_idx : int | None  None なら何もしない
+    by_qtype : dict        {質問タイプ: bias}
+    default_bias : float   未指定タイプに使う bias
+    """
+    if unanswerable_idx is None:
+        return logits
+    for i, q in enumerate(qtexts):
+        b = by_qtype.get(question_type(q), default_bias)
+        if b:
+            logits[i, unanswerable_idx] += b
+    return logits
 
 
 def set_seed(seed):

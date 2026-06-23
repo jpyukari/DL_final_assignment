@@ -149,6 +149,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, layers[3], 512, stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.out_channels = 512 * block.expansion  # layer4 出力チャネル数
         self.fc = nn.Linear(512 * block.expansion, 512)
 
     def _make_layer(self, block, blocks, out_channels, stride=1):
@@ -193,6 +194,17 @@ class ResNet(nn.Module):
         x: torch.Tensor
             ResNet によって生成される特徴量
         """
+        x = self.forward_features(x)  # (B, out_channels, H', W')
+
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x
+
+    def forward_features(self, x):
+        """avgpool/fc の前の空間特徴マップ (B, out_channels, H', W') を返す。
+        cross-attention 融合で「画像のどこを見るか」を扱うために使う。"""
         x = self.relu(self.bn1(self.conv1(x)))
         x = self.maxpool(x)
 
@@ -201,12 +213,8 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
         return x
-    
+
 
 def ResNet18():
     """

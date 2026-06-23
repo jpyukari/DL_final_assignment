@@ -10,7 +10,7 @@ from tqdm import tqdm
 from configs.baseline import *
 
 from src.dataset import VQADataset
-from src.metrics import VQA_criterion
+from src.metrics import VQA_criterion, leaderboard_faithful_acc
 from src.utils import set_seed, build_transform
 
 from src.models.baseline import VQAModel
@@ -47,15 +47,21 @@ def train_one_epoch(
         answers = batch["answers"].to(device)
         mode_answer = batch["mode_answer"].to(device)
 
-        pred = model(image, question)
+        # #3: AUX_IMAGE_LOSS_WEIGHT>0 のとき画像onlyの補助予測も受け取る
+        use_aux = AUX_IMAGE_LOSS_WEIGHT > 0
+        if use_aux:
+            pred, aux = model(image, question, return_aux=True)
+        else:
+            pred = model(image, question)
 
-            
         if LOSS_TYPE == "hard":
 
             loss = criterion(
                 pred,
                 mode_answer
             )
+            if use_aux:
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, mode_answer)
 
         elif LOSS_TYPE == "soft":
 
@@ -69,6 +75,8 @@ def train_one_epoch(
                 pred,
                 soft_target
             )
+            if use_aux:
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, soft_target)
 
         else:
             raise ValueError(
@@ -121,6 +129,7 @@ def validate(
     total_loss = 0
     total_acc = 0
     total_simple_acc = 0
+    all_preds = []  # honest acc 用に予測 idx を順序通り収集
 
     start = time.time()
 
@@ -155,6 +164,8 @@ def validate(
 
         total_loss += loss.item()
 
+        all_preds.extend(pred.argmax(1).cpu().tolist())
+
         total_acc += VQA_criterion(
             pred.argmax(1),
             answers
@@ -169,6 +180,7 @@ def validate(
         total_acc / len(dataloader),
         total_simple_acc / len(dataloader),
         time.time() - start,
+        all_preds,
     )
 
 
@@ -193,7 +205,10 @@ def main():
 
     print("4")
 
-    transform = build_transform()
+    # 学習は aug あり、推論/検証は aug なし（eval）。少数クラスには強い aug。
+    train_transform = build_transform(train=True)
+    strong_transform = build_transform(train=True, strong=True)
+    eval_transform = build_transform(train=False)
 
     # TRAIN_ON_ALL: train_split + valid_split を結合して全データ学習（最終提出用）
     train_df_path = (
@@ -207,7 +222,9 @@ def main():
 
         image_dir="./data/train",
 
-        transform=transform,
+        transform=train_transform,
+
+        strong_transform=strong_transform,
 
     )
 
@@ -223,7 +240,7 @@ def main():
 
             image_dir="./data/train",
 
-            transform=transform,
+            transform=eval_transform,
 
         )
         print("6")
@@ -249,6 +266,21 @@ def main():
         n_answer=len(train_dataset.answer2idx),
         backbone=RESNET,
     )
+
+    # 自己教師あり事前学習のバックボーン重みを初期値としてロード（スクラッチResNet用）。
+    # ViT 利用時は model.resnet が無く、ImageNet 重みを直接ロード済みなので skip。
+    if PRETRAINED_BACKBONE and hasattr(model, "resnet"):
+        sd = torch.load(PRETRAINED_BACKBONE, map_location="cpu")
+        missing, unexpected = model.resnet.load_state_dict(sd, strict=False)
+        print(
+            f"[SSL] backbone をロード: {PRETRAINED_BACKBONE} "
+            f"(missing={len(missing)}, unexpected={len(unexpected)})"
+        )
+    elif getattr(model, "use_vit", False):
+        print("[backbone] ImageNet 事前学習 ViT-B/16 を fine-tune します")
+    else:
+        print("[SSL] PRETRAINED_BACKBONE 未設定 → スクラッチ学習")
+
     unanswerable_idx = (
         train_dataset.answer2idx.get("unanswerable")
         if EXCLUDE_UNANSWERABLE else None
@@ -290,11 +322,27 @@ def main():
             f"Unknown LOSS_TYPE: {LOSS_TYPE}"
         )
 
+    # 事前学習バックボーン（vit.*/resnet.*）は LR を下げて fine-tune し、
+    # 新規ヘッド（LSTM/融合/fc 等）は通常 LR で学習する param group を作る。
+    backbone_params, head_params = [], []
+    for name, p in model.named_parameters():
+        if name.startswith("vit.") or name.startswith("resnet."):
+            backbone_params.append(p)
+        else:
+            head_params.append(p)
+    param_groups = [{"params": head_params, "lr": LR}]
+    if backbone_params:
+        param_groups.append(
+            {"params": backbone_params, "lr": LR * BACKBONE_LR_MULT})
+    print(
+        f"[optim] head lr={LR}, backbone lr={LR * BACKBONE_LR_MULT} "
+        f"(n_backbone={len(backbone_params)}, n_head={len(head_params)})"
+    )
+
     if OPTIMIZER == "adam":
 
         optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=LR,
+            param_groups,
             weight_decay=WEIGHT_DECAY,
         )
 
@@ -335,7 +383,7 @@ def main():
             )
             continue
 
-        valid_loss, valid_acc, valid_simple_acc, valid_time = (
+        valid_loss, valid_acc, valid_simple_acc, valid_time, valid_preds = (
             validate(
                 model,
                 valid_loader,
@@ -346,10 +394,23 @@ def main():
             )
         )
 
+        # honest acc（<unk>→unanswerable 変換＋元文字列照合）= public と整合する指標。
+        # index 照合の valid_acc は <unk> 同士一致で過大評価されるので、
+        # best モデル選択・early-stopping はこちらで行う。
+        valid_faithful = leaderboard_faithful_acc(
+            valid_preds, valid_dataset, train_dataset.idx2answer
+        )
+
+        # 崩壊（collapse）指標: valid で実際に予測された distinct ラベル数。
+        # 小さい（数〜十数）ほど少数クラスへの崩壊が進んでいる＝悪い。
+        distinct_preds = len(set(valid_preds))
+
         print(
             f"Epoch [{epoch+1}/{total_epochs}] "
             f"Train Acc={train_acc:.4f} "
-            f"Valid Acc={valid_acc:.4f}"
+            f"Valid Acc(index)={valid_acc:.4f} "
+            f"Valid Acc(honest/LB)={valid_faithful:.4f} "
+            f"distinct_preds={distinct_preds}"
         )
 
         if not math.isfinite(valid_loss):
@@ -358,8 +419,8 @@ def main():
                 "発散したモデルを best として保存しないため停止します。"
             )
 
-        if valid_acc > best_acc:
-            best_acc = valid_acc
+        if valid_faithful > best_acc:
+            best_acc = valid_faithful
             epochs_no_improve = 0
             torch.save(
                 model.state_dict(),
@@ -369,13 +430,13 @@ def main():
             epochs_no_improve += 1
             print(
                 f"No improvement for {epochs_no_improve}/{PATIENCE} "
-                f"epoch(s) (best Valid Acc={best_acc:.4f})"
+                f"epoch(s) (best honest Valid Acc={best_acc:.4f})"
             )
 
             if epochs_no_improve >= PATIENCE:
                 print(
                     f"Early stopping at epoch {epoch+1} "
-                    f"(best Valid Acc={best_acc:.4f})"
+                    f"(best honest Valid Acc={best_acc:.4f})"
                 )
                 break
 

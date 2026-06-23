@@ -26,6 +26,7 @@ from configs.baseline import *
 from src.dataset import VQADataset, process_text
 from src.models.baseline import VQAModel
 from src.utils import build_transform
+from src.metrics import leaderboard_faithful_acc
 
 
 def sample_vqa_acc(pred_idx, answer_idxs):
@@ -128,6 +129,11 @@ def analyze(model_path, submission_npy=None, top_k=25, min_support=5, resnet=Non
 
     overall_vqa_acc = float(np.mean(per_sample_acc))
 
+    # リーダーボード相当の honest acc（<unk>→unanswerable 変換＋元文字列照合）。
+    # index 照合の overall_vqa_acc は <unk> 同士一致で過大評価されるため、
+    # public と整合する値はこちら。
+    faithful_acc = leaderboard_faithful_acc(preds, valid_dataset, idx2answer)
+
     label_stats = []
     for lab, accs in per_label_acc.items():
         label_stats.append({
@@ -176,6 +182,9 @@ def analyze(model_path, submission_npy=None, top_k=25, min_support=5, resnet=Non
             "BATCH_SIZE": BATCH_SIZE,
             "NUM_EPOCHS": NUM_EPOCHS,
             "IMAGE_SIZE": IMAGE_SIZE,
+            "FUSION": FUSION,
+            "AUX_IMAGE_LOSS_WEIGHT": AUX_IMAGE_LOSS_WEIGHT,
+            "MIN_ANSWER_COUNT": MIN_ANSWER_COUNT,
             "model_path": model_path,
         },
         "label_space": {
@@ -185,6 +194,7 @@ def analyze(model_path, submission_npy=None, top_k=25, min_support=5, resnet=Non
         "valid": {
             "n_samples": len(preds),
             "overall_vqa_acc": round(overall_vqa_acc, 4),
+            "faithful_vqa_acc": round(faithful_acc, 4),
             "distinct_predicted_labels": used_labels,
             "concentration_yes_no_unanswerable": concentration,
             "prediction_ranking": pred_ranking,
@@ -228,7 +238,8 @@ def write_report(report):
     L(f"config: {report['config']}")
     L(f"ラベル総数(answer): {report['label_space']['n_answer_labels']} / "
       f"質問語彙: {report['label_space']['n_question_vocab']}")
-    L(f"valid: n={v['n_samples']}  VQA acc={v['overall_vqa_acc']}")
+    L(f"valid: n={v['n_samples']}  VQA acc(index)={v['overall_vqa_acc']}  "
+      f"VQA acc(LB相当/honest)={v['faithful_vqa_acc']}  ← publicと整合するのはこちら")
     L(f"予測に使われたラベル種類: {v['distinct_predicted_labels']}")
     L(f"yes/no/unanswerable 集中度: {v['concentration_yes_no_unanswerable']}")
 

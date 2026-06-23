@@ -1,9 +1,28 @@
 # VQA Project
 https://github.com/jpyukari/DL_final_assignment.git
+
 ## omnicampus 環境セットアップ
+
 chmod +x src/setup.sh
+
 bash src/setup.sh
+
 pip install scikit-learn
+
+**##事前学習
+**
+# 1. SSL 事前学習（ラベル無し画像のみ）
+python -m src.ssl_pretrain --epochs 100 --batch-size 256
+#   → ./outputs/checkpoints/ssl_backbone.pt
+
+# 2. configs/baseline.py を編集
+PRETRAINED_BACKBONE = "./outputs/checkpoints/ssl_backbone.pt"
+
+# 3. VQA 学習（バックボーンが初期化済みで始まる）
+python train.py
+#   ログに [SSL] backbone をロード ... missing=0 unexpected=0 が出れば成功
+
+
 ## 学習
 
 bash python train.py 
