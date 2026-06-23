@@ -7,8 +7,12 @@ import torch
 from torchvision import transforms
 
 from configs.baseline import (
-    IMAGE_SIZE, NORMALIZE, NORM_MEAN, NORM_STD, AUGMENT,
+    IMAGE_SIZE, NORMALIZE, NORM_MEAN, NORM_STD, AUGMENT, IMAGE_BACKBONE,
 )
+
+# CLIP の前処理は専用の正規化統計（ImageNet とは別）。CLIP使用時はこちらを使う。
+CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 
 def build_transform(train=False, strong=False):
@@ -45,7 +49,12 @@ def build_transform(train=False, strong=False):
 
     ops.append(transforms.ToTensor())
     if NORMALIZE:
-        ops.append(transforms.Normalize(mean=NORM_MEAN, std=NORM_STD))
+        # CLIP backbone のときは CLIP 専用統計、それ以外は config の統計。
+        if IMAGE_BACKBONE.startswith("clip"):
+            mean, std = CLIP_MEAN, CLIP_STD
+        else:
+            mean, std = NORM_MEAN, NORM_STD
+        ops.append(transforms.Normalize(mean=mean, std=std))
     return transforms.Compose(ops)
 
 

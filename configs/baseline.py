@@ -109,7 +109,7 @@ PROBE_QTYPE = "color"
 #                       color/count など「画像の特定箇所を見る」問題向け。
 # 診断（src.question_only）の結論: 質問priorは~0.59で飽和、伸びしろは画像側。
 # cross_attention は画像情報を答えに効かせるための本命。
-FUSION = "concat"
+FUSION = "cross_attention"
 
 # #3「画像を捨てさせない学習」: 画像プール特徴だけから回答を予測する補助ヘッドを付け、
 # 総ロス = 主ロス + AUX_IMAGE_LOSS_WEIGHT × 画像onlyロス。
@@ -118,11 +118,15 @@ FUSION = "concat"
 # 注意: train と inference で ≷0 を揃えること（アーキテクチャが変わるため）。
 AUX_IMAGE_LOSS_WEIGHT = 0.0
 
-# 画像エンコーダの種別（VQAModel が参照）。
-#   "vit_b_16"  : ImageNet 事前学習 ViT-B/16 を fine-tune（推奨・本命）。
-#                 ルール: 事前学習モデルを「構成要素」として使い配布データでFTするのは可。
-#   "resnet18/34/50" : 自前スクラッチ ResNet（旧。~0.50 で頭打ち）。
-IMAGE_BACKBONE = "vit_b_16"
+# 画像エンコーダの種別（VQAModel が参照）。いずれも一般事前学習＋FT（合法）。
+#   "clip_vit_b_16"     : CLIP ViT-B/16（画像-言語対照学習）。VQAに強い。本命の次段。
+#                         transformers 必須。正規化は build_transform が自動でCLIP用に切替。
+#   "vit_b_16"          : ImageNet ViT-B/16（86M, 224px固定）。
+#   "efficientnet_v2_s" : EfficientNetV2-S（21M）。小さく過学習しにくい。
+#   "efficientnet_b0"   : EfficientNet-B0（5M）。さらに軽量。
+#   "resnet18/34/50"    : 自前スクラッチ ResNet（旧。~0.50 で頭打ち）。
+# 注意: 切替時は train/inference で同じ値にすること（state_dict 整合）。
+IMAGE_BACKBONE = "clip_vit_b_16"
 
 RESNET = "resnet50"  # IMAGE_BACKBONE がスクラッチResNet時のみ有効
 
