@@ -109,7 +109,7 @@ PROBE_QTYPE = "color"
 #                       color/count など「画像の特定箇所を見る」問題向け。
 # 診断（src.question_only）の結論: 質問priorは~0.59で飽和、伸びしろは画像側。
 # cross_attention は画像情報を答えに効かせるための本命。
-FUSION = "concat"
+FUSION = "cross_attention"
 
 # #3「画像を捨てさせない学習」: 画像プール特徴だけから回答を予測する補助ヘッドを付け、
 # 総ロス = 主ロス + AUX_IMAGE_LOSS_WEIGHT × 画像onlyロス。
