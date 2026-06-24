@@ -44,7 +44,9 @@ EXCLUDE_UNANSWERABLE = False
 # <unk> は希少回答の寄せ集めで最大の「ゴミ箱クラス」。重みを下げて、
 # 予測が <unk>/unanswerable の2クラスに崩壊するのを防ぐ。
 CLASS_WEIGHTS = {
-    "<unk>": 0.3,
+    # BCE では <unk>(巨大な catch-all) を 0.0 で損失から除外しないと、独立sigmoidが
+    # <unk> へ崩壊する（softmaxと違い競合が無いため）。softに戻す時は 0.3 へ。
+    "<unk>": 0.0,
     "unanswerable": 0.8,
     "yes": 3,
     "no": 3,
