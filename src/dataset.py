@@ -11,6 +11,7 @@ from torchvision import transforms
 from statistics import mode
 from collections import Counter
 
+import os
 import json
 
 from configs.baseline import (
@@ -107,6 +108,11 @@ class VQADataset(torch.utils.data.Dataset):
         # を使って OCR位置の予測を文字列に戻す。
         self.ocr_token_strings = None
         if OCR_ENABLED:
+            if not os.path.exists(OCR_TOKENS_PATH):
+                raise RuntimeError(
+                    f"OCR_ENABLED=True ですが {OCR_TOKENS_PATH} がありません。\n"
+                    "先に OCR 抽出を実行してください: python -m src.ocr_extract"
+                )
             with open(OCR_TOKENS_PATH, encoding="utf-8") as f:
                 ocr_cache = json.load(f)
             self.ocr_token_strings = [
