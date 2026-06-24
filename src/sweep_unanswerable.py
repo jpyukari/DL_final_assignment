@@ -22,7 +22,7 @@ import torch
 from configs.baseline import *
 
 from src.dataset import VQADataset, process_text, UNK_ANSWER
-from src.metrics import vqa_acc_string
+from src.metrics import vqa_acc_string, decode_combined_pred
 from src.models.baseline import VQAModel
 from src.utils import build_transform, question_type
 
@@ -45,7 +45,13 @@ def collect_logits(model, dataset, device):
     for batch in loader:
         image = batch["image"].to(device)
         question = batch["question"].to(device)
-        logits_all.append(model(image, question).cpu())
+        if OCR_ENABLED:
+            out = model(image, question,
+                        batch["ocr_char_ids"].to(device),
+                        batch["ocr_mask"].to(device))
+        else:
+            out = model(image, question)
+        logits_all.append(out.cpu())
     return torch.cat(logits_all)
 
 
@@ -63,10 +69,7 @@ def sweep_biases(model, valid_dataset, idx2answer, unans, device,
     logits = collect_logits(model, valid_dataset, device)  # (N, C)
     N = logits.shape[0]
 
-    pred_str_of = [
-        "unanswerable" if idx2answer[i] == UNK_ANSWER else idx2answer[i]
-        for i in range(len(idx2answer))
-    ]
+    ocr = valid_dataset.ocr_token_strings  # OCR無効なら None
     gt_strings = [
         [process_text(a["answer"]) for a in valid_dataset.df["answers"][i]]
         for i in range(N)
@@ -84,7 +87,10 @@ def sweep_biases(model, valid_dataset, idx2answer, unans, device,
         sub[:, unans] += bias
         preds = sub.argmax(1).tolist()
         return float(np.mean([
-            vqa_acc_string(pred_str_of[p], gt_strings[idx])
+            vqa_acc_string(
+                decode_combined_pred(
+                    p, idx2answer, ocr[idx] if ocr is not None else None),
+                gt_strings[idx])
             for p, idx in zip(preds, indices)
         ]))
 

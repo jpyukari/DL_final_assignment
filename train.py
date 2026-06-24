@@ -18,6 +18,8 @@ from src.models.baseline import VQAModel
 from src.loss import (
     SoftCrossEntropyLoss,
     build_soft_target,
+    build_combined_soft_target,
+    build_combined_hard_target,
 )
 
 
@@ -47,36 +49,46 @@ def train_one_epoch(
         answers = batch["answers"].to(device)
         mode_answer = batch["mode_answer"].to(device)
 
-        # #3: AUX_IMAGE_LOSS_WEIGHT>0 のとき画像onlyの補助予測も受け取る
+        # OCR コピー機構: OCRフィールドを渡し、結合出力空間で学習する。
         use_aux = AUX_IMAGE_LOSS_WEIGHT > 0
-        if use_aux:
-            pred, aux = model(image, question, return_aux=True)
+        if OCR_ENABLED:
+            ocr_char_ids = batch["ocr_char_ids"].to(device)
+            ocr_mask = batch["ocr_mask"].to(device)
+            ans_ocr_pos = batch["ans_ocr_pos"].to(device)
+            out = model(image, question, ocr_char_ids, ocr_mask, return_aux=use_aux)
         else:
-            pred = model(image, question)
+            out = model(image, question, return_aux=use_aux)
+        pred, aux = out if use_aux else (out, None)
+
+        n_answer = model.n_answer
 
         if LOSS_TYPE == "hard":
 
-            loss = criterion(
-                pred,
-                mode_answer
+            target = (
+                build_combined_hard_target(answers, ans_ocr_pos, n_answer)
+                if OCR_ENABLED else mode_answer
             )
+            loss = criterion(pred, target)
             if use_aux:
                 loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, mode_answer)
 
         elif LOSS_TYPE == "soft":
 
-            soft_target = build_soft_target(
-                answers,
-                pred.shape[1],
-                ignore_index=unanswerable_idx,
-            )
+            if OCR_ENABLED:
+                soft_target = build_combined_soft_target(
+                    answers, ans_ocr_pos, n_answer, OCR_MAX_TOKENS,
+                    ignore_index=unanswerable_idx,
+                )
+            else:
+                soft_target = build_soft_target(
+                    answers, pred.shape[1], ignore_index=unanswerable_idx,
+                )
 
-            loss = criterion(
-                pred,
-                soft_target
-            )
+            loss = criterion(pred, soft_target)
             if use_aux:
-                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, soft_target)
+                # 補助ヘッドは語彙のみ。OCR時は soft_target の語彙部分を使う。
+                aux_t = soft_target[:, :n_answer] if OCR_ENABLED else soft_target
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, aux_t)
 
         else:
             raise ValueError(
@@ -140,27 +152,37 @@ def validate(
         answers = batch["answers"].to(device)
         mode_answer = batch["mode_answer"].to(device)
 
-        pred = model(image, question)
+        if OCR_ENABLED:
+            ocr_char_ids = batch["ocr_char_ids"].to(device)
+            ocr_mask = batch["ocr_mask"].to(device)
+            ans_ocr_pos = batch["ans_ocr_pos"].to(device)
+            pred = model(image, question, ocr_char_ids, ocr_mask)
+        else:
+            pred = model(image, question)
+
+        n_answer = model.n_answer
 
         if LOSS_TYPE == "hard":
 
-            loss = criterion(
-                pred,
-                mode_answer
+            target = (
+                build_combined_hard_target(answers, ans_ocr_pos, n_answer)
+                if OCR_ENABLED else mode_answer
             )
+            loss = criterion(pred, target)
 
         elif LOSS_TYPE == "soft":
 
-            soft_target = build_soft_target(
-                answers,
-                pred.shape[1],
-                ignore_index=unanswerable_idx,
-            )
+            if OCR_ENABLED:
+                soft_target = build_combined_soft_target(
+                    answers, ans_ocr_pos, n_answer, OCR_MAX_TOKENS,
+                    ignore_index=unanswerable_idx,
+                )
+            else:
+                soft_target = build_soft_target(
+                    answers, pred.shape[1], ignore_index=unanswerable_idx,
+                )
 
-            loss = criterion(
-                pred,
-                soft_target
-            )
+            loss = criterion(pred, soft_target)
 
         total_loss += loss.item()
 
@@ -306,6 +328,10 @@ def main():
         print(f"[class_weights] 適用(≠1.0): {applied}")
     else:
         print("[class_weights] 全て 1.0 = 無効（CLASS_WEIGHTS を変えても学習は変わりません）")
+    # OCR コピー時は出力が [語彙 ∥ OCR(K)] に拡張されるので、重みも K 個 1.0 を足す。
+    if OCR_ENABLED:
+        class_weights = torch.cat([class_weights, torch.ones(OCR_MAX_TOKENS)])
+        print(f"[OCR] 有効: 出力空間を語彙+{OCR_MAX_TOKENS} に拡張")
     class_weights = class_weights.to(device)
 
     if LOSS_TYPE == "hard":

@@ -118,6 +118,19 @@ FUSION = "cross_attention"
 # 注意: train と inference で ≷0 を揃えること（アーキテクチャが変わるため）。
 AUX_IMAGE_LOSS_WEIGHT = 0.0
 
+# ===== OCR コピー機構（M4C-lite, 8-ocr）=====
+# VizWiz は「ラベル/日付/ブランド/額面/画面文字を読む」質問が多い。OCRで抽出した
+# 画像内テキストトークンを答えとしてコピーできる pointer 出力を追加する。
+#   出力空間 = 語彙(n_answer) ∪ そのサンプルのOCRトークン(最大 OCR_MAX_TOKENS 個)
+#   → 語彙外の単語（pepsi/数字/ラベル語）も「コピー」で出力可能になる。
+# 要 data/ocr_tokens.json（python -m src.ocr_extract で先に生成）。
+# False で完全に無効（従来のCLIP分類器のまま）。train/inference で値を揃えること。
+# 制約(v1): 単トークンのコピーのみ。複数語の答え（"1 dollar"/日付）は未対応。
+OCR_ENABLED = False
+OCR_TOKENS_PATH = "./data/ocr_tokens.json"
+OCR_MAX_TOKENS = 24   # 1サンプルで使うOCRトークン上限 K（pointer候補数）
+OCR_MAX_CHARS = 16    # 各OCRトークンの文字数上限（char-level encoder）
+
 # 画像エンコーダの種別（VQAModel が参照）。いずれも一般事前学習＋FT（合法）。
 #   "clip_vit_b_16"     : CLIP ViT-B/16（画像-言語対照学習）。VQAに強い。本命の次段。
 #                         transformers 必須。正規化は build_transform が自動でCLIP用に切替。

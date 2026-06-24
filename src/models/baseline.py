@@ -9,7 +9,8 @@ from torchvision.models import (
 
 from .resnet import ResNet18, ResNet34, ResNet50
 
-from configs.baseline import FUSION, AUX_IMAGE_LOSS_WEIGHT, IMAGE_BACKBONE
+from configs.baseline import FUSION, AUX_IMAGE_LOSS_WEIGHT, IMAGE_BACKBONE, OCR_ENABLED
+from src.dataset import OCR_NUM_CHARS, OCR_CHAR_PAD
 
 
 # config の RESNET 文字列から（レガシーな）スクラッチ ResNet 生成関数を引く
@@ -129,6 +130,24 @@ class VQAModel(nn.Module):
             nn.Linear(self.d, n_answer) if AUX_IMAGE_LOSS_WEIGHT > 0 else None
         )
 
+        # ---- OCR コピー機構（M4C-lite）----
+        # 画像内OCRトークンを文字レベルGRUで埋め込み、融合特徴から作る query との
+        # 内積でコピースコアを出す。出力 = [語彙logits ∥ OCRスコア(K)]。
+        self.ocr_enabled = OCR_ENABLED
+        self.n_answer = n_answer
+        if OCR_ENABLED:
+            self.ocr_char_emb = nn.Embedding(
+                OCR_NUM_CHARS, 64, padding_idx=OCR_CHAR_PAD)
+            self.ocr_gru = nn.GRU(64, self.d, batch_first=True)
+            self.copy_proj = nn.Linear(1024, self.d)  # 融合特徴(1024) → copy query
+
+    def _encode_ocr(self, ocr_char_ids):
+        """OCRトークンの文字id列 (B,K,C) → トークン埋め込み (B,K,d)。"""
+        B, K, C = ocr_char_ids.shape
+        emb = self.ocr_char_emb(ocr_char_ids.reshape(B * K, C))  # (B*K, C, 64)
+        _, h = self.ocr_gru(emb)                                 # h: (1, B*K, d)
+        return h.squeeze(0).reshape(B, K, self.d)                # (B, K, d)
+
     def _encode_question(self, question):
         """質問 → (トークン系列 (B,L,512), マスク (B,L,1), プール特徴 (B,512))。"""
         q = question.long()
@@ -179,7 +198,8 @@ class VQAModel(nn.Module):
             )
         return img_vec, img_tokens
 
-    def forward(self, image, question, return_aux=False):
+    def forward(self, image, question, ocr_char_ids=None, ocr_mask=None,
+                return_aux=False):
         q_tokens, q_mask, q_pooled = self._encode_question(question)
         img_vec, img_tokens = self._image_features(image)
 
@@ -195,7 +215,18 @@ class VQAModel(nn.Module):
             grounded = (attended * q_mask).sum(1) / q_mask.sum(1).clamp(min=1.0)
             x = torch.cat([grounded, q_pooled], dim=1)
 
-        logits = self.fc(x)
+        logits = self.fc(x)  # (B, n_answer)
+
+        # OCR コピー: OCRトークンが渡されたとき、語彙logitsの後ろにコピースコアを連結。
+        # ocr 未指定（analyze 等）では従来通り語彙のみ。
+        if self.ocr_enabled and ocr_char_ids is not None:
+            ocr_emb = self._encode_ocr(ocr_char_ids)             # (B, K, d)
+            q_copy = self.copy_proj(x)                           # (B, d)
+            scores = (ocr_emb * q_copy.unsqueeze(1)).sum(-1)     # (B, K)
+            scores = scores / (self.d ** 0.5)
+            scores = scores.masked_fill(ocr_mask == 0, -1e4)     # PADトークンを無効化
+            logits = torch.cat([logits, scores], dim=1)          # (B, n_answer+K)
+
         if return_aux:
             aux = self.aux_image_fc(img_vec) if self.aux_image_fc is not None else None
             return logits, aux

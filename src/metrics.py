@@ -32,6 +32,23 @@ def vqa_acc_string(pred_str, gt_strings):
     return acc / n
 
 
+def decode_combined_pred(p, idx2answer, ocr_tokens=None):
+    """結合出力空間のインデックス p を回答文字列に戻す。
+      p < n_answer    : 語彙の回答（<unk> は提出と同じく "unanswerable" に変換）
+      p >= n_answer   : OCR トークン（コピー）。p-n_answer 番目のOCRトークン文字列。
+    ocr_tokens はそのサンプルのOCRトークン列（無ければ unanswerable にフォールバック）。
+    """
+    from src.dataset import UNK_ANSWER
+    n_answer = len(idx2answer)
+    if p < n_answer:
+        s = idx2answer[p]
+        return "unanswerable" if s == UNK_ANSWER else s
+    k = p - n_answer
+    if ocr_tokens and k < len(ocr_tokens):
+        return ocr_tokens[k]
+    return "unanswerable"
+
+
 def leaderboard_faithful_acc(preds, dataset, idx2answer):
     """リーダーボードと同じ採点での valid VQA accuracy。
 
@@ -49,13 +66,13 @@ def leaderboard_faithful_acc(preds, dataset, idx2answer):
         元の回答文字列 dataset.df["answers"] を持つもの
     idx2answer : dict
     """
-    from src.dataset import process_text, UNK_ANSWER
+    from src.dataset import process_text
 
+    ocr = dataset.ocr_token_strings  # OCR無効なら None
     total = 0.0
     for i, p in enumerate(preds):
-        pred_str = idx2answer[p]
-        if pred_str == UNK_ANSWER:
-            pred_str = "unanswerable"
+        pred_str = decode_combined_pred(
+            p, idx2answer, ocr[i] if ocr is not None else None)
         gt_strings = [
             process_text(a["answer"]) for a in dataset.df["answers"][i]
         ]

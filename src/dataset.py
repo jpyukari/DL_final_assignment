@@ -11,11 +11,29 @@ from torchvision import transforms
 from statistics import mode
 from collections import Counter
 
+import json
+
 from configs.baseline import (
     EXCLUDE_UNANSWERABLE, MIN_ANSWER_COUNT, MINORITY_MAX_COUNT, MAX_QLEN,
+    OCR_ENABLED, OCR_TOKENS_PATH, OCR_MAX_TOKENS, OCR_MAX_CHARS,
 )
 
 UNK_ANSWER = "<unk>"
+
+# OCR コピー機構の文字レベル encoder 用の文字語彙（固定）。
+# 0=PAD, 1..=各文字, 末尾=UNK。OCRトークン文字列をこの id 列に変換する。
+OCR_CHARSET = " abcdefghijklmnopqrstuvwxyz0123456789.,-/$%&"
+_OCR_CHAR2IDX = {c: i + 1 for i, c in enumerate(OCR_CHARSET)}
+OCR_CHAR_PAD = 0
+OCR_CHAR_UNK = len(OCR_CHARSET) + 1
+OCR_NUM_CHARS = len(OCR_CHARSET) + 2  # PAD + 文字 + UNK（Embedding の語彙数）
+
+
+def encode_ocr_token(token):
+    """OCRトークン文字列 → 文字 id 列 (OCR_MAX_CHARS,)。PADで右詰め。"""
+    ids = [_OCR_CHAR2IDX.get(c, OCR_CHAR_UNK) for c in token[:OCR_MAX_CHARS]]
+    ids += [OCR_CHAR_PAD] * (OCR_MAX_CHARS - len(ids))
+    return ids
 
 
 def process_text(text):
@@ -83,6 +101,18 @@ class VQADataset(torch.utils.data.Dataset):
         else:
             self.df = pd.read_json(df_path)  # 画像ファイルのパス，question, answerを持つDataFrame
         self.answer = answer
+
+        # OCR コピー機構: 画像ごとの抽出済みトークン（python -m src.ocr_extract）を
+        # 読み込み、行ごとに対応付ける。inference/sweep は self.ocr_token_strings[i]
+        # を使って OCR位置の予測を文字列に戻す。
+        self.ocr_token_strings = None
+        if OCR_ENABLED:
+            with open(OCR_TOKENS_PATH, encoding="utf-8") as f:
+                ocr_cache = json.load(f)
+            self.ocr_token_strings = [
+                ocr_cache.get(img, [])[:OCR_MAX_TOKENS]
+                for img in self.df["image"]
+            ]
 
         # question / answerの辞書を作成
         self.question2idx = {}
@@ -211,10 +241,46 @@ class VQADataset(torch.utils.data.Dataset):
             else:
                 image = self.transform(image)
 
-            return {"image": image, "question": question,"answers": torch.Tensor(answers), "mode_answer": int(mode_answer_idx),}
+            out = {"image": image, "question": question,
+                   "answers": torch.Tensor(answers),
+                   "mode_answer": int(mode_answer_idx)}
+            if OCR_ENABLED:
+                out.update(self._ocr_fields(idx, answer_texts))
+            return out
         else:
             image = self.transform(image)
-            return {"image": image, "question": question}
+            out = {"image": image, "question": question}
+            if OCR_ENABLED:
+                out.update(self._ocr_fields(idx))
+            return out
+
+    def _ocr_fields(self, idx, answer_texts=None):
+        """OCRコピー機構用フィールドを作る。
+        ocr_char_ids (K, OCR_MAX_CHARS): 各OCRトークンの文字id列
+        ocr_mask (K,): 実トークン=1 / PAD=0
+        ans_ocr_pos (10,): 各回答が「語彙外かつOCRトークンに一致」する位置 k、無ければ -1
+                           （語彙にある回答は語彙側で扱うので -1）
+        """
+        tokens = self.ocr_token_strings[idx][:OCR_MAX_TOKENS]
+        char_ids = [encode_ocr_token(t) for t in tokens]
+        mask = [1.0] * len(char_ids)
+        while len(char_ids) < OCR_MAX_TOKENS:  # K までPADトークンで埋める
+            char_ids.append([OCR_CHAR_PAD] * OCR_MAX_CHARS)
+            mask.append(0.0)
+        out = {
+            "ocr_char_ids": torch.tensor(char_ids, dtype=torch.long),
+            "ocr_mask": torch.tensor(mask, dtype=torch.float),
+        }
+        if answer_texts is not None:
+            tok_index = {}
+            for k, t in enumerate(tokens):
+                tok_index.setdefault(t, k)  # 最初の出現位置
+            pos = [
+                tok_index[a] if (a not in self.answer2idx and a in tok_index) else -1
+                for a in answer_texts
+            ]
+            out["ans_ocr_pos"] = torch.tensor(pos, dtype=torch.long)
+        return out
 
     def __len__(self):
         return len(self.df)

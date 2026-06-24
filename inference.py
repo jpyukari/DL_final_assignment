@@ -11,6 +11,7 @@ from configs.baseline import *
 
 from src.dataset import VQADataset, UNK_ANSWER, process_text
 from src.models.baseline import VQAModel
+from src.metrics import decode_combined_pred
 from src.utils import build_transform, apply_unanswerable_bias
 
 
@@ -127,10 +128,14 @@ def main():
             image = batch["image"].to(device)
             question = batch["question"].to(device)
 
-            pred = model(
-                image,
-                question
-            )
+            if OCR_ENABLED:
+                pred = model(
+                    image, question,
+                    batch["ocr_char_ids"].to(device),
+                    batch["ocr_mask"].to(device),
+                )
+            else:
+                pred = model(image, question)
 
             # この batch に対応する質問文（タイプ別 unanswerable 補正用）
             bs = pred.shape[0]
@@ -142,16 +147,18 @@ def main():
                 pred, qtexts, unanswerable_idx,
                 bias_by_qtype, bias_default,
             )
+
+            pred_idx = pred.argmax(1).item()
+
+            # 結合出力をデコード（OCR位置ならコピートークン文字列、<unk>→unanswerable）。
+            ocr_toks = (
+                test_dataset.ocr_token_strings[sample_i]
+                if OCR_ENABLED else None
+            )
+            answer = decode_combined_pred(
+                pred_idx, train_dataset.idx2answer, ocr_toks)
+
             sample_i += bs
-
-            pred = pred.argmax(1).item()
-
-            answer = train_dataset.idx2answer[pred]
-
-            # <unk>（足切りされた希少回答の受け皿）は提出すると 0 点なので、
-            # 高頻度で部分点が入りやすい unanswerable に振り替える。
-            if answer == UNK_ANSWER:
-                answer = "unanswerable"
 
             submission.append(answer)
 
