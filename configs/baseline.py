@@ -24,9 +24,13 @@ WEIGHT_DECAY = 1e-5
 
 OPTIMIZER = "adam"
 
-# "hard": 最頻値1個を正解に CrossEntropy / "soft": 10人の回答のソフト分布で学習。
-# soft は VQA の採点（複数回答の部分点）に整合するので honest が伸びやすい。
-LOSS_TYPE = "soft"
+# 損失の種類:
+#   "hard": 最頻値1個を正解に CrossEntropy
+#   "soft": 10人の回答の正規化分布で softmax-CE
+#   "bce" : VQA標準（BUTD/LXMERT系）。各クラス独立に sigmoid+BCE、
+#           ターゲットは soft score = min(投票数/3, 1)（合計1にしない）。
+#           採点指標(部分点)に直結し、honest が伸びやすい既知の定番。
+LOSS_TYPE = "bce"
 
 # True: 正解集計から "unanswerable" を除外する
 #   - hard: mode_answer を unanswerable 以外で取る

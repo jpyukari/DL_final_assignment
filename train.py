@@ -18,6 +18,8 @@ from src.models.baseline import VQAModel
 from src.loss import (
     SoftCrossEntropyLoss,
     build_soft_target,
+    VQABCELoss,
+    build_vqa_score_target,
 )
 
 
@@ -77,6 +79,13 @@ def train_one_epoch(
             )
             if use_aux:
                 loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, soft_target)
+
+        elif LOSS_TYPE == "bce":
+
+            score_target = build_vqa_score_target(answers, pred.shape[1])
+            loss = criterion(pred, score_target)
+            if use_aux:
+                loss = loss + AUX_IMAGE_LOSS_WEIGHT * criterion(aux, score_target)
 
         else:
             raise ValueError(
@@ -161,6 +170,11 @@ def validate(
                 pred,
                 soft_target
             )
+
+        elif LOSS_TYPE == "bce":
+
+            score_target = build_vqa_score_target(answers, pred.shape[1])
+            loss = criterion(pred, score_target)
 
         total_loss += loss.item()
 
@@ -315,6 +329,10 @@ def main():
     elif LOSS_TYPE == "soft":
 
         criterion = SoftCrossEntropyLoss(weight=class_weights)
+
+    elif LOSS_TYPE == "bce":
+
+        criterion = VQABCELoss(weight=class_weights)
 
     else:
 
