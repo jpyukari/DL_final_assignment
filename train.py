@@ -322,10 +322,27 @@ def main():
             f"Unknown LOSS_TYPE: {LOSS_TYPE}"
         )
 
-    # 事前学習バックボーン（vit.*/resnet.*）は LR を下げて fine-tune し、
+    # 過学習抑制: CLIP画像encoderの前段ブロックを凍結（小データFTの定番）。
+    if FREEZE_BACKBONE_BLOCKS > 0 and getattr(model, "use_clip", False):
+        # transformers のバージョン差に対応（.vision_model がある版／無い版）
+        vm = getattr(model.clip, "vision_model", model.clip)
+        for p in vm.embeddings.parameters():
+            p.requires_grad = False
+        for i, layer in enumerate(vm.encoder.layers):
+            if i < FREEZE_BACKBONE_BLOCKS:
+                for p in layer.parameters():
+                    p.requires_grad = False
+        n_frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+        print(f"[freeze] CLIP前段 {FREEZE_BACKBONE_BLOCKS} ブロック凍結 "
+              f"(凍結パラメータ {n_frozen/1e6:.0f}M)")
+
+    # 事前学習バックボーン（vit.*/clip.*/cnn.*/resnet.*）は LR を下げて fine-tune し、
     # 新規ヘッド（LSTM/融合/fc 等）は通常 LR で学習する param group を作る。
+    # 凍結した層（requires_grad=False）は optimizer に渡さない。
     backbone_params, head_params = [], []
     for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
         if name.startswith(("vit.", "clip.", "cnn.", "resnet.")):
             backbone_params.append(p)
         else:

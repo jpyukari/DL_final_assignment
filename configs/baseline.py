@@ -20,7 +20,12 @@ LR = 1e-4
 # 事前学習特徴を壊さないため小さめ（0.05〜0.1）。1.0 で無効（全体同一LR）。
 BACKBONE_LR_MULT = 0.05   # ViT-Lは大きく過学習しやすいので優しくFT（CLIP-Bは0.1で可）
 
-WEIGHT_DECAY = 1e-5
+# 過学習抑制: CLIP画像encoderの前段 Transformer ブロックを凍結する数。
+# 小データFTの定番（大きな事前学習特徴を壊さず、後段＋ヘッドだけ適応）。
+# CLIP ViT-L/14 は全24ブロック。0 で無効（全層FT）。12〜18 程度から。
+FREEZE_BACKBONE_BLOCKS = 14
+
+WEIGHT_DECAY = 1e-4   # 1e-5→1e-4 に強化（ViT-Lの過学習抑制）
 
 OPTIMIZER = "adam"
 
