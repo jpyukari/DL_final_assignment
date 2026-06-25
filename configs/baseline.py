@@ -1,6 +1,6 @@
 SEED = 42
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32   # ViT-L/14 は重いので縮小（OOMならさらに 16 へ。CLIP-B等なら128可）
 
 NUM_EPOCHS = 25
 
@@ -18,7 +18,7 @@ LR = 1e-4
 # 事前学習バックボーン（ViT等）のfine-tune用に、backboneだけ LR を下げる倍率。
 # 画像encoder（vit.*/resnet.*）の学習率 = LR × BACKBONE_LR_MULT。
 # 事前学習特徴を壊さないため小さめ（0.05〜0.1）。1.0 で無効（全体同一LR）。
-BACKBONE_LR_MULT = 0.1
+BACKBONE_LR_MULT = 0.05   # ViT-Lは大きく過学習しやすいので優しくFT（CLIP-Bは0.1で可）
 
 WEIGHT_DECAY = 1e-5
 
@@ -126,7 +126,7 @@ AUX_IMAGE_LOSS_WEIGHT = 0.0
 #   "efficientnet_b0"   : EfficientNet-B0（5M）。さらに軽量。
 #   "resnet18/34/50"    : 自前スクラッチ ResNet（旧。~0.50 で頭打ち）。
 # 注意: 切替時は train/inference で同じ値にすること（state_dict 整合）。
-IMAGE_BACKBONE = "clip_vit_b_16"
+IMAGE_BACKBONE = "clip_vit_l_14"
 
 RESNET = "resnet50"  # IMAGE_BACKBONE がスクラッチResNet時のみ有効
 

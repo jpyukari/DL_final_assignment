@@ -23,6 +23,7 @@ RESNET_FACTORY = {
 CLIP_HF_NAME = {
     "clip_vit_b_16": "openai/clip-vit-base-patch16",
     "clip_vit_b_32": "openai/clip-vit-base-patch32",
+    "clip_vit_l_14": "openai/clip-vit-large-patch14",  # 224px, hidden=1024（自動対応）
 }
 
 # torchvision の ImageNet 事前学習 CNN。値 = (生成関数, 出力チャネル数)。
