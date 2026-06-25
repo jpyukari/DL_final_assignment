@@ -326,7 +326,7 @@ def main():
     # 新規ヘッド（LSTM/融合/fc 等）は通常 LR で学習する param group を作る。
     backbone_params, head_params = [], []
     for name, p in model.named_parameters():
-        if name.startswith("vit.") or name.startswith("resnet."):
+        if name.startswith(("vit.", "clip.", "cnn.", "resnet.")):
             backbone_params.append(p)
         else:
             head_params.append(p)

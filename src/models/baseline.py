@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
 
-from torchvision.models import vit_b_16, ViT_B_16_Weights
+from torchvision.models import (
+    vit_b_16, ViT_B_16_Weights,
+    efficientnet_v2_s, EfficientNet_V2_S_Weights,
+    efficientnet_b0, EfficientNet_B0_Weights,
+)
 
 from .resnet import ResNet18, ResNet34, ResNet50
 
@@ -13,6 +17,25 @@ RESNET_FACTORY = {
     "resnet18": ResNet18,
     "resnet34": ResNet34,
     "resnet50": ResNet50,
+}
+
+# CLIP 画像エンコーダ（HuggingFace transformers）。IMAGE_BACKBONE → HFモデル名。
+CLIP_HF_NAME = {
+    "clip_vit_b_16": "openai/clip-vit-base-patch16",
+    "clip_vit_b_32": "openai/clip-vit-base-patch32",
+}
+
+# torchvision の ImageNet 事前学習 CNN。値 = (生成関数, 出力チャネル数)。
+# .features で空間特徴マップ (B, C, H, W) を取り出して使う（ViT のパッチ相当）。
+TV_CNN_FACTORY = {
+    "efficientnet_v2_s": (
+        lambda: efficientnet_v2_s(weights=EfficientNet_V2_S_Weights.IMAGENET1K_V1),
+        1280,
+    ),
+    "efficientnet_b0": (
+        lambda: efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1),
+        1280,
+    ),
 }
 
 
@@ -37,14 +60,32 @@ class VQAModel(nn.Module):
 
         # ---- 画像エンコーダ ----
         self.use_vit = (IMAGE_BACKBONE == "vit_b_16")
+        self.use_clip = (IMAGE_BACKBONE in CLIP_HF_NAME)
+        self.use_tv_cnn = (IMAGE_BACKBONE in TV_CNN_FACTORY)
         if self.use_vit:
             # ImageNet 事前学習 ViT-B/16。heads を外して特徴抽出器として使う。
             self.vit = vit_b_16(weights=ViT_B_16_Weights.IMAGENET1K_V1)
             self.vit.heads = nn.Identity()
-            img_dim = 768  # ViT-B hidden size（CLS/パッチtrークン次元）
+            img_dim = 768  # ViT-B hidden size（CLS/パッチトークン次元）
             self.img_pool_proj = nn.Linear(img_dim, self.d)  # CLS → 512
             if self.fusion == "cross_attention":
                 self.img_token_proj = nn.Linear(img_dim, self.d)  # patch → 512
+        elif self.use_clip:
+            # CLIP の画像エンコーダ（画像-言語対照学習）。pooler=CLS, last_hidden=patch。
+            from transformers import CLIPVisionModel  # 遅延import（未使用時に依存不要）
+            self.clip = CLIPVisionModel.from_pretrained(CLIP_HF_NAME[IMAGE_BACKBONE])
+            img_dim = self.clip.config.hidden_size  # 768
+            self.img_pool_proj = nn.Linear(img_dim, self.d)
+            if self.fusion == "cross_attention":
+                self.img_token_proj = nn.Linear(img_dim, self.d)
+        elif self.use_tv_cnn:
+            # ImageNet 事前学習 CNN（EfficientNet 等）。.features で空間特徴を取る。
+            ctor, out_ch = TV_CNN_FACTORY[IMAGE_BACKBONE]
+            self.cnn = ctor()
+            self.cnn_pool = nn.AdaptiveAvgPool2d(1)
+            self.img_pool_proj = nn.Linear(out_ch, self.d)
+            if self.fusion == "cross_attention":
+                self.img_token_proj = nn.Linear(out_ch, self.d)
         else:
             if backbone not in RESNET_FACTORY:
                 raise ValueError(
@@ -112,6 +153,20 @@ class VQAModel(nn.Module):
             img_vec = self.img_pool_proj(tokens[:, 0])     # (B, 512) CLS
             img_tokens = (
                 self.img_token_proj(tokens[:, 1:])         # (B, N, 512)
+                if self.fusion == "cross_attention" else None
+            )
+        elif self.use_clip:
+            out = self.clip(pixel_values=image)
+            img_vec = self.img_pool_proj(out.pooler_output)           # (B, 512) CLS
+            img_tokens = (
+                self.img_token_proj(out.last_hidden_state[:, 1:])     # (B, N, 512)
+                if self.fusion == "cross_attention" else None
+            )
+        elif self.use_tv_cnn:
+            feat = self.cnn.features(image)                # (B, C, H, W)
+            img_vec = self.img_pool_proj(self.cnn_pool(feat).flatten(1))  # (B,512)
+            img_tokens = (
+                self.img_token_proj(feat.flatten(2).transpose(1, 2))  # (B, HW, 512)
                 if self.fusion == "cross_attention" else None
             )
         else:
